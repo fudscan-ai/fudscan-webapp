@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
+import WalletConnectButton from '@/components/WalletConnectButton';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]);
@@ -400,9 +401,14 @@ export default function ChatPage() {
         </div>
         <div className="separator"></div>
         <div className="modeless-dialog">
-          <div style={{textAlign: 'center'}}>
-            <div className="mac-heading" style={{marginBottom: '8px'}}>FUDScan: The Ultimate FOMO/FUD Risk Scanner</div>
-            <div className="mac-text-sm">Turn every investor into a professional FUD-buster</div>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <div style={{textAlign: 'center', flex: 1}}>
+              <div className="mac-heading" style={{marginBottom: '8px'}}>FUDScan: The Ultimate FOMO/FUD Risk Scanner</div>
+              <div className="mac-text-sm">Turn every investor into a professional FUD-buster</div>
+            </div>
+            <div style={{marginLeft: '20px'}}>
+              <WalletConnectButton />
+            </div>
           </div>
           {isLoading && (
             <button
