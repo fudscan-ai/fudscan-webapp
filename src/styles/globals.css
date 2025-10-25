@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+/* System.css variables are inherited from /public/system.css */
+:root {
+  /* Use system.css color scheme */
+  --background: var(--primary, #FFFFFF);
+  --foreground: var(--secondary, #000000);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Chicago_12, Chicago, Monaco, Geneva_9, monospace;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Custom markdown content styling for system.css */
+.markdown-content {
+  line-height: 1.6;
+  font-family: Chicago_12, Monaco, monospace;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  font-family: Chicago, monospace;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p {
+  margin-bottom: 1em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.markdown-content li {
+  margin-bottom: 0.25em;
+}
+
+.markdown-content blockquote {
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  border-left: 4px solid var(--secondary);
+  background-color: var(--primary);
+  font-style: italic;
+}
+
+.markdown-content code {
+  font-family: Monaco, Courier, monospace;
+  font-size: 0.875em;
+}
+
+.markdown-content pre {
+  margin: 1em 0;
+  padding: 1em;
+  background-color: var(--primary);
+  border: 2px solid var(--secondary);
+  box-shadow: var(--box-shadow);
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  border: 2px solid var(--secondary);
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 0.75em;
+  text-align: left;
+  border: 1px solid var(--secondary);
+}
+
+.markdown-content th {
+  background-color: var(--primary);
+  font-weight: 600;
+}
+
+.markdown-content a {
+  color: var(--secondary);
+  text-decoration: underline;
+}
+
+.markdown-content a:hover {
+  text-decoration: none;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border: 2px solid var(--secondary);
+}
+
+.markdown-content hr {
+  margin: 2em 0;
+  border: none;
+  border-top: 2px solid var(--secondary);
+}

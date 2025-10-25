@@ -1,0 +1,48 @@
+.gradient-text {
+  background: linear-gradient(90deg, #0052FF 0%, #00BB77 40%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}
+
+.tick {
+  line-height: 40px;
+  margin-right: 40px;
+}
+
+.tick::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 6px;
+  border-left-width: 1px;
+  content: var(--tw-content);
+  transition-property: height;
+  transition-timing-function: cubic-bezier(.4,0,.2,1);
+  transition-duration: .15s;
+}
+
+.tick:hover::before {
+  height: 12px;
+}
+
+/* Fixed main content */
+.fixed-main {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+/* Ensure body has enough height for scrolling */
+html, body {
+  height: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: #171717;
+}

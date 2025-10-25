@@ -1,0 +1,29 @@
+-- Insert default API tools based on the existing GPTs project
+INSERT INTO api_tools (id, name, display_name, description, category, endpoint, method, parameters, scopes, is_active, is_external) VALUES
+('debank_user_balance', 'debank.user.balance', 'DeBank User Balance', 'Get total balance and asset distribution for a blockchain address across multiple chains. Use when user asks about wallet balance, total assets, or asset distribution.', 'debank', '/api/tools/debank/user-balance', 'POST', '{"address": "string", "chain_id": "string?"}', ARRAY['debank:read'], true, false),
+('debank_user_tokens', 'debank.user.tokens', 'DeBank User Tokens', 'Get detailed token holdings for a specific address and chain. Use when user asks about token holdings, token balance, or specific token positions.', 'debank', '/api/tools/debank/user-tokens', 'POST', '{"address": "string", "chain_id": "string"}', ARRAY['debank:read'], true, false),
+('debank_user_protocols', 'debank.user.protocols', 'DeBank User Protocols', 'Get DeFi protocol positions and investments for an address. Use when user asks about DeFi participation, protocol holdings, or yield farming positions.', 'debank', '/api/tools/debank/user-protocols', 'POST', '{"address": "string", "chain_id": "string"}', ARRAY['debank:read'], true, false),
+('debank_token_info', 'debank.token.info', 'DeBank Token Info', 'Get detailed information about a specific token including price, market cap, and contract details. Use when user asks about token information or token details.', 'debank', '/api/tools/debank/token-info', 'POST', '{"chain_id": "string", "token_id": "string"}', ARRAY['debank:read'], true, false),
+('debank_protocol_info', 'debank.protocol.info', 'DeBank Protocol Info', 'Get information about a DeFi protocol including TVL, supported chains, and protocol details. Use when user asks about protocol information or DeFi project details.', 'debank', '/api/tools/debank/protocol-info', 'POST', '{"protocol_id": "string"}', ARRAY['debank:read'], true, false),
+('nansen_smart_holdings', 'nansen.smart.holdings', 'Nansen Smart Money Holdings', 'Get smart money and institutional holdings for a token. Use when user asks about smart money, institutional investors, or whale holdings.', 'nansen', '/api/tools/nansen/smart-holdings', 'POST', '{"token_address": "string", "chain": "string"}', ARRAY['nansen:read'], true, false),
+('nansen_smart_trades', 'nansen.smart.trades', 'Nansen Smart Money Trades', 'Get recent smart money trading activity for a token. Use when user asks about smart money trades, institutional trading, or whale transactions.', 'nansen', '/api/tools/nansen/smart-trades', 'POST', '{"token_address": "string", "chain": "string"}', ARRAY['nansen:read'], true, false),
+('nansen_smart_netflows', 'nansen.smart.netflows', 'Nansen Smart Money Net Flows', 'Get smart money net flows (inflows/outflows) for a token over time. Use when user asks about money flows, capital movements, or smart money trends.', 'nansen', '/api/tools/nansen/smart-netflows', 'POST', '{"token_address": "string", "timeframe": "string"}', ARRAY['nansen:read'], true, false),
+('nansen_token_holders', 'nansen.token.holders', 'Nansen Token Holders', 'Get token holder distribution and analysis. Use when user asks about token holders, address distribution, or holder analytics.', 'nansen', '/api/tools/nansen/token-holders', 'POST', '{"token_address": "string", "chain": "string"}', ARRAY['nansen:read'], true, false),
+('nansen_wallet_analysis', 'nansen.wallet.analysis', 'Nansen Wallet Analysis', 'Get detailed wallet analysis including labels, behavior patterns, and portfolio analysis. Use when user asks about wallet analysis or address profiling.', 'nansen', '/api/tools/nansen/wallet-analysis', 'POST', '{"address": "string", "chain": "string"}', ARRAY['nansen:read'], true, false),
+('dex_search', 'dex.search', 'DEX Search', 'Search for trading pairs across decentralized exchanges. Use when user wants to find trading pairs or search DEX markets.', 'dex', '/api/tools/dex/search', 'POST', '{"query": "string"}', ARRAY['dex:read'], true, false),
+('dex_pair_info', 'dex.pair', 'DEX Pair Info', 'Get detailed information about a specific trading pair including price, volume, and liquidity. Use when user asks about specific trading pair details.', 'dex', '/api/tools/dex/pair-info', 'POST', '{"pair_address": "string"}', ARRAY['dex:read'], true, false),
+('dex_token_pairs', 'dex.token', 'DEX Token Pairs', 'Get all trading pairs for a specific token across DEXes. Use when user asks about all pairs for a token or token trading options.', 'dex', '/api/tools/dex/token-pairs', 'POST', '{"token_address": "string"}', ARRAY['dex:read'], true, false),
+('finance_quote', 'finance.quote', 'Finance Quote', 'Get real-time price quotes and market data for cryptocurrencies and traditional assets. Use when user asks about current prices, market data, or price quotes.', 'finance', '/api/tools/finance/quote', 'POST', '{"symbol": "string"}', ARRAY['finance:read'], true, false),
+('trending_pools', 'trending.pools', 'Trending Pools', 'Get trending cryptocurrency pools and hot tokens across different blockchain networks. Use when user asks about trending tokens, hot pools, or popular cryptocurrencies.', 'trending', '/api/trending-pools', 'GET', '{"chain": "string?", "limit": "number?"}', ARRAY['trending:read'], true, false);
+
+-- Create a trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_api_tools_updated_at BEFORE UPDATE ON api_tools FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

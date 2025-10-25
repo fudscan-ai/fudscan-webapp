@@ -1,0 +1,446 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TokenPrice {
+  id        Int      @id @default(autoincrement())
+  symbol    String
+  price     Decimal  @db.Decimal(18, 8)
+  timestamp BigInt
+
+  @@index([symbol])
+  @@index([timestamp])
+  @@map("token_prices")
+}
+
+model StakingApy {
+  id          Int     @id @default(autoincrement())
+  totalApy    Decimal @db.Decimal(10, 6) @map("total_apy")
+  baseApy     Decimal @db.Decimal(10, 6) @map("base_apy")
+  rewardsApy  Decimal @db.Decimal(10, 6) @map("rewards_apy")
+  rewards     Json?   @db.JsonB
+  timestamp   BigInt
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([timestamp])
+  @@map("staking_apy")
+}
+
+model TrendingPoolSnapshot {
+  id        Int      @id @default(autoincrement())
+  chainKey  String   @map("chain_key")
+  network   String
+  data      Json     @db.JsonB
+  fetchedAt BigInt   @map("fetched_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([chainKey, fetchedAt])
+  @@map("trending_pool_snapshots")
+}
+
+model Message {
+  id                       String            @id
+  content                  String
+  contentTypeAuthorityId   String            @map("content_type_authority_id")
+  contentTypeTypeId        String            @map("content_type_type_id")
+  contentTypeVersionMajor  Int               @map("content_type_version_major")
+  contentTypeVersionMinor  Int               @map("content_type_version_minor")
+  conversationId           String            @map("conversation_id")
+  deliveryStatus           String            @map("delivery_status")
+  senderInboxId            String            @map("sender_inbox_id")
+  sentAt                   DateTime          @map("sent_at")
+  sentAtNs                 BigInt            @map("sent_at_ns")
+  kind                     String
+  parameters               Json?             @db.JsonB
+  createdAt                DateTime          @default(now()) @map("created_at")
+  fallback                 String?
+  compression              String?
+  outgoingMessages         OutgoingMessage[] @relation("ReferenceMessage")
+
+  @@index([conversationId, senderInboxId])
+  @@map("messages")
+}
+
+model OutgoingMessage {
+  id                String    @id
+  content           String
+  conversationId    String    @map("conversation_id")
+  senderInboxId     String    @map("sender_inbox_id")
+  recipientInboxId  String    @map("recipient_inbox_id")
+  sentAt            DateTime  @default(now()) @map("sent_at")
+  status            String    @default("sent")
+  referenceMessageId String?   @map("reference_message_id")
+  referenceMessage   Message?  @relation("ReferenceMessage", fields: [referenceMessageId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, senderInboxId])
+  @@map("outgoing_messages")
+}
+
+// Admin and RAG related models
+model AdminUser {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String   // bcrypt hashed
+  role      String   @default("admin")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}
+
+model Client {
+  id            String          @id @default(cuid())
+  name          String
+  description   String?
+  apiKey        String          @unique @default(cuid()) @map("api_key")
+  instructions  String?         @db.Text // Custom prompt instructions for the client
+  isActive      Boolean         @default(true) @map("is_active")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  knowledgeBases KnowledgeBase[]
+  clientApiTools ClientApiTool[] // Junction table for API tool permissions
+
+  @@map("clients")
+}
+
+model KnowledgeBase {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  type        String     // "client" or "general"
+  clientId    String?    @map("client_id")
+  client      Client?    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  documents   Document[]
+
+  @@index([clientId])
+  @@map("knowledge_bases")
+}
+
+model Document {
+  id              String        @id @default(cuid())
+  filename        String
+  originalName    String        @map("original_name")
+  mimeType        String        @map("mime_type")
+  size            Int
+  content         String        @db.Text
+  md5sum          String        @default("")// MD5 hash of file content
+  knowledgeBaseId String        @map("knowledge_base_id")
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chromaId        String?       @map("chroma_id") // Chroma collection document ID
+  processed       Boolean       @default(false)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([knowledgeBaseId])
+  @@index([chromaId])
+  @@index([md5sum])
+  @@map("documents")
+}
+
+// API Tool Management
+model ApiTool {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "debank.user.balance"
+  displayName String   @map("display_name") // e.g., "DeBank User Balance"
+  description String   @db.Text // Description for AI model to understand when to use this tool
+  category    String   // e.g., "debank", "nansen", "dex", "finance"
+  endpoint    String?  // Internal endpoint or external URL
+  method      String   @default("GET") // HTTP method
+  parameters  Json?    @db.JsonB // Expected parameters schema
+  scopes      String[] // Required scopes/permissions
+  isActive    Boolean  @default(true) @map("is_active")
+  isExternal  Boolean  @default(false) @map("is_external") // true for third-party APIs
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  clientApiTools ClientApiTool[] // Junction table for client permissions
+
+  @@index([category])
+  @@index([isActive])
+  @@map("api_tools")
+}
+
+// Junction table for Client-ApiTool many-to-many relationship
+model ClientApiTool {
+  id        String   @id @default(cuid())
+  clientId  String   @map("client_id")
+  apiToolId String   @map("api_tool_id")
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  apiTool   ApiTool  @relation(fields: [apiToolId], references: [id], onDelete: Cascade)
+  isEnabled Boolean  @default(true) @map("is_enabled") // Can be disabled without removing the relationship
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([clientId, apiToolId]) // Prevent duplicate relationships
+  @@index([clientId])
+  @@index([apiToolId])
+  @@map("client_api_tools")
+}
+
+// Conversation and Intent Recognition
+model Conversation {
+  id           String            @id @default(cuid())
+  clientId     String            @map("client_id")
+  sessionId    String?           @map("session_id") // Optional session grouping
+  query        String            @db.Text
+  intent       String?           // Recognized intent: "direct_answer", "tool_enhanced", etc.
+  workflow     Json?             @db.JsonB // Workflow steps determined by AI
+  response     String?           @db.Text
+  toolsUsed    String[]          @map("tools_used") // List of tools that were called
+  ragUsed      Boolean           @default(false) @map("rag_used")
+  status       String            @default("processing") // "processing", "completed", "error"
+  latencyMs    Int?              @map("latency_ms")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  workflowSteps WorkflowStep[]
+
+  @@index([clientId])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+// Individual workflow steps for streaming responses
+model WorkflowStep {
+  id             String       @id @default(cuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  stepType       String       @map("step_type") // "thinking", "rag_retrieving", "api_calling", "answer_generating"
+  stepName       String       @map("step_name") // Human readable step name
+  status         String       @default("pending") // "pending", "running", "completed", "error"
+  input          Json?        @db.JsonB // Input parameters for this step
+  output         Json?        @db.JsonB // Output/result of this step
+  error          String?      @db.Text // Error message if failed
+  startedAt      DateTime?    @map("started_at")
+  completedAt    DateTime?    @map("completed_at")
+  order          Int          // Order of execution
+
+  @@index([conversationId, order])
+  @@map("workflow_steps")
+}
+
+// Virtuals.io data models - separate tables for each data type
+
+// Virtual Agents (from agents endpoint)
+model VirtualAgent {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  description           String?  @db.Text
+  grossAgenticAmount    Decimal? @db.Decimal(18, 8) @map("gross_agentic_amount")
+  createdAt             DateTime? @map("created_at")
+  publishedAt           DateTime? @map("published_at")
+  ownerAddress          String?  @map("owner_address")
+  profilePic            String?  @map("profile_pic")
+  successRate           Decimal? @db.Decimal(10, 4) @map("success_rate")
+  successfulJobCount    Int?     @map("successful_job_count")
+  tokenAddress          String?  @map("token_address")
+  transactionCount      Int?     @map("transaction_count")
+  twitterHandle         String?  @map("twitter_handle")
+  uniqueBuyerCount      Int?     @map("unique_buyer_count")
+  virtualAgentId        String?  @map("virtual_agent_id")
+  walletAddress         String?  @map("wallet_address")
+  walletBalance         Decimal? @db.Decimal(18, 8) @map("wallet_balance")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([virtualAgentId])
+  @@index([name])
+  @@index([scrapedAt])
+  @@map("virtual_agents")
+}
+
+// Virtual Agents Spotlight (from agents_spotlight endpoint)
+model VirtualAgentSpotlight {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  category              String?
+  cluster               String?
+  description           String?  @db.Text
+  grossAgenticAmount    Decimal? @db.Decimal(18, 8) @map("gross_agentic_amount")
+  metrics               Json?    @db.JsonB // Contains successfulJobCount, successRate, uniqueBuyerCount, lastActiveAt
+  ownerAddress          String?  @map("owner_address")
+  profilePic            String?  @map("profile_pic")
+  role                  String?
+  tokenAddress          String?  @map("token_address")
+  twitterHandle         String?  @map("twitter_handle")
+  virtualAgentId        String?  @map("virtual_agent_id")
+  walletAddress         String?  @map("wallet_address")
+  walletBalance         Decimal? @db.Decimal(18, 8) @map("wallet_balance")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([virtualAgentId])
+  @@index([name])
+  @@index([category])
+  @@index([scrapedAt])
+  @@map("virtual_agents_spotlight")
+}
+
+// Virtual Trending (from trending endpoint)
+model VirtualTrending {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  cores                 Json?    @db.JsonB // Array of core objects
+  chain                 String?
+  daoAddress            String?  @map("dao_address")
+  description           String?  @db.Text
+  devHoldingPercentage  Decimal? @db.Decimal(10, 4) @map("dev_holding_percentage")
+  factory               String?
+  holderCount           Int?     @map("holder_count")
+  holderCountPercent24h Decimal? @db.Decimal(10, 4) @map("holder_count_percent_24h")
+  image                 Json?    @db.JsonB // Image object with url
+  liquidityUsd          Decimal? @db.Decimal(18, 8) @map("liquidity_usd")
+  lpAddress             String?  @map("lp_address")
+  mcapInVirtual         Decimal? @db.Decimal(18, 8) @map("mcap_in_virtual")
+  netVolume24h          Decimal? @db.Decimal(18, 8) @map("net_volume_24h")
+  preToken              String?  @map("pre_token")
+  preTokenPair          String?  @map("pre_token_pair")
+  priceChangePercent24h Decimal? @db.Decimal(10, 4) @map("price_change_percent_24h")
+  revenueConnectWallet  String?  @map("revenue_connect_wallet")
+  role                  String?
+  status                String?
+  tbaAddress            String?  @map("tba_address")
+  tokenAddress          String?  @map("token_address")
+  top10HolderPercentage Decimal? @db.Decimal(10, 4) @map("top10_holder_percentage")
+  totalSupply           BigInt?  @map("total_supply")
+  totalValueLocked      String?  @map("total_value_locked")
+  veTokenAddress        String?  @map("ve_token_address")
+  volume24h             Decimal? @db.Decimal(18, 8) @map("volume_24h")
+  virtualId             String?  @map("virtual_id")
+  virtualTokenValue     String?  @map("virtual_token_value")
+  walletAddress         String?  @map("wallet_address")
+  imageUrl              String?  @map("image_url")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([virtualId])
+  @@index([name])
+  @@index([volume24h])
+  @@index([chain])
+  @@index([scrapedAt])
+  @@map("virtual_trending")
+}
+
+// Virtual Fundamentals (from fundamentals endpoint)
+model VirtualFundamental {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  cores                 Json?    @db.JsonB // Array of core objects
+  chain                 String?
+  daoAddress            String?  @map("dao_address")
+  description           String?  @db.Text
+  devHoldingPercentage  Decimal? @db.Decimal(10, 4) @map("dev_holding_percentage")
+  factory               String?
+  holderCount           Int?     @map("holder_count")
+  holderCountPercent24h Decimal? @db.Decimal(10, 4) @map("holder_count_percent_24h")
+  image                 Json?    @db.JsonB // Image object with url
+  liquidityUsd          Decimal? @db.Decimal(18, 8) @map("liquidity_usd")
+  lpAddress             String?  @map("lp_address")
+  mcapInVirtual         Decimal? @db.Decimal(18, 8) @map("mcap_in_virtual")
+  netVolume24h          Decimal? @db.Decimal(18, 8) @map("net_volume_24h")
+  preToken              String?  @map("pre_token")
+  preTokenPair          String?  @map("pre_token_pair")
+  priceChangePercent24h Decimal? @db.Decimal(10, 4) @map("price_change_percent_24h")
+  revenueConnectWallet  String?  @map("revenue_connect_wallet")
+  role                  String?
+  status                String?
+  tbaAddress            String?  @map("tba_address")
+  tokenAddress          String?  @map("token_address")
+  top10HolderPercentage Decimal? @db.Decimal(10, 4) @map("top10_holder_percentage")
+  totalSupply           BigInt?  @map("total_supply")
+  totalValueLocked      String?  @map("total_value_locked")
+  veTokenAddress        String?  @map("ve_token_address")
+  volume24h             Decimal? @db.Decimal(18, 8) @map("volume_24h")
+  virtualId             String?  @map("virtual_id")
+  virtualTokenValue     String?  @map("virtual_token_value")
+  walletAddress         String?  @map("wallet_address")
+  imageUrl              String?  @map("image_url")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([virtualId])
+  @@index([name])
+  @@index([chain])
+  @@index([scrapedAt])
+  @@map("virtual_fundamentals")
+}
+
+// Virtual Yield APY (from yield_apy endpoint)
+model VirtualYieldApy {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  chain                 String?
+  image                 Json?    @db.JsonB // Image object with id and url
+  status                String?
+  tokenAddress          String?  @map("token_address")
+  virtualTokenValue     String?  @map("virtual_token_value")
+  imageUrl              String?  @map("image_url")
+  genesisId             Int?     @map("genesis_id")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([chain])
+  @@index([genesisId])
+  @@index([scrapedAt])
+  @@map("virtual_yield_apy")
+}
+
+// Virtual Upcoming Agents (from upcoming_agents endpoint)
+model VirtualUpcomingAgent {
+  id                    Int      @id // Original ID from virtuals.io
+  name                  String
+  cores                 Json?    @db.JsonB // Array of core objects
+  chain                 String?
+  description           String?  @db.Text
+  devHoldingPercentage  Decimal? @db.Decimal(10, 4) @map("dev_holding_percentage")
+  factory               String?
+  holderCount           Int?     @map("holder_count")
+  holderCountPercent24h Decimal? @db.Decimal(10, 4) @map("holder_count_percent_24h")
+  image                 Json?    @db.JsonB // Image object with url
+  liquidityUsd          Decimal? @db.Decimal(18, 8) @map("liquidity_usd")
+  netVolume24h          Decimal? @db.Decimal(18, 8) @map("net_volume_24h")
+  preToken              String?  @map("pre_token")
+  preTokenPair          String?  @map("pre_token_pair")
+  priceChangePercent24h Decimal? @db.Decimal(10, 4) @map("price_change_percent_24h")
+  role                  String?
+  status                String?
+  top10HolderPercentage Decimal? @db.Decimal(10, 4) @map("top10_holder_percentage")
+  volume24h             Decimal? @db.Decimal(18, 8) @map("volume_24h")
+  walletAddress         String?  @map("wallet_address")
+  imageUrl              String?  @map("image_url")
+  
+  // Timestamps
+  scrapedAt             DateTime @default(now()) @map("scraped_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([chain])
+  @@index([status])
+  @@index([scrapedAt])
+  @@map("virtual_upcoming_agents")
+}
