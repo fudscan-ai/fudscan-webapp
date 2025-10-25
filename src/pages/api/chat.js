@@ -1,9 +1,11 @@
-import generateResponse from '@/utils/openai';
+import aiWorkflowOrchestrator from '@/lib/ai-workflow';
+import { PrismaClient } from '@/generated/prisma/index.js';
+
+const prisma = new PrismaClient();
 
 /**
- * Simple chat endpoint for FUDSCAN
- * Uses OpenAI API key from environment variables
- * No database authentication required
+ * AI-powered chat endpoint for FUDSCAN with streaming workflow execution
+ * Uses AIWorkflowOrchestrator to analyze intent, execute tools, and generate responses
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, conversationHistory } = req.body;
+    const { message, conversationHistory, stream = true } = req.body;
 
     if (!message) {
       return res.status(400).json({ message: 'Message is required' });
@@ -24,83 +26,229 @@ export default async function handler(req, res) {
       });
     }
 
-    // Build conversation context from history
-    let conversationContext = '';
-    if (conversationHistory && conversationHistory.length > 0) {
-      conversationContext = conversationHistory
-        .map(msg => `${msg.type === 'user' ? 'User' : 'FUDSCAN'}: ${msg.content}`)
-        .join('\n');
+    // For FUDSCAN, use a default client setup
+    // In production, you'd get this from user session/authentication
+    const clientId = process.env.DEFAULT_CLIENT_ID || 'fudscan-default';
+
+    // Get available tools and knowledge bases
+    const availableTools = await getAvailableTools(clientId);
+    const knowledgeBases = await getKnowledgeBases(clientId);
+
+    console.log('🔍 Analyzing query:', message);
+    console.log('🛠️ Available tools:', availableTools.length);
+    console.log('📚 Knowledge bases:', knowledgeBases.length);
+
+    // Analyze intent and get workflow plan
+    const workflowPlan = await aiWorkflowOrchestrator.analyzeIntent(
+      message,
+      clientId,
+      availableTools,
+      knowledgeBases
+    );
+
+    console.log('📋 Workflow plan:', JSON.stringify(workflowPlan, null, 2));
+
+    // If streaming is disabled or direct answer, return immediately
+    if (!stream || workflowPlan.intent === 'DIRECT_ANSWER') {
+      return res.status(200).json({
+        message: workflowPlan.reply || 'No response generated',
+        intent: workflowPlan.intent,
+        coin: null,
+        workflow: workflowPlan,
+        citations: [{
+          type: 'ai_model',
+          source: 'OpenAI GPT-4o',
+          description: 'Direct answer from AI knowledge',
+          success: true
+        }]
+      });
     }
 
-    // Generate response using OpenAI
-    const responseText = await generateResponse(message, conversationContext);
+    // Set up Server-Sent Events (SSE) for streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-    console.log('Raw OpenAI response:', responseText);
-
-    // Parse JSON response - try to extract JSON even if wrapped in markdown
-    let parsedResponse;
-    try {
-      // First try direct parse
-      parsedResponse = JSON.parse(responseText);
-    } catch (e) {
-      // Try to extract JSON from markdown code blocks
-      const jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-      if (jsonMatch) {
-        try {
-          parsedResponse = JSON.parse(jsonMatch[1]);
-        } catch (e2) {
-          console.error('Failed to parse extracted JSON:', e2);
-        }
-      }
-
-      // If still no success, try to find raw JSON in the text
-      if (!parsedResponse) {
-        const rawJsonMatch = responseText.match(/\{[\s\S]*"intent"[\s\S]*"reply"[\s\S]*\}/);
-        if (rawJsonMatch) {
-          try {
-            parsedResponse = JSON.parse(rawJsonMatch[0]);
-          } catch (e3) {
-            console.error('Failed to parse raw JSON:', e3);
-          }
-        }
-      }
-
-      // Last resort - return as plain text
-      if (!parsedResponse) {
-        parsedResponse = {
-          intent: 'unmatched',
-          reply: responseText
-        };
-      }
-    }
-
-    console.log('Parsed response:', parsedResponse);
-
-    // Extract the reply text - with better safety checks
-    let replyText = parsedResponse.reply || parsedResponse.message || '';
-
-    // If reply is still empty, something went wrong - log it and provide fallback
-    if (!replyText || replyText.trim().length === 0) {
-      console.error('No reply field found in parsed response:', parsedResponse);
-      console.error('Original responseText:', responseText);
-      replyText = 'Sorry, I received an invalid response. Please try again.';
-    }
-
-    const finalResponse = {
-      message: replyText,
-      intent: parsedResponse.intent || 'unmatched',
-      coin: parsedResponse.coin || null
+    // Helper to send SSE events
+    const sendEvent = (event, data) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    console.log('Sending to frontend:', finalResponse);
+    // Send workflow plan
+    sendEvent('workflow_plan', workflowPlan);
 
-    return res.status(200).json(finalResponse);
+    // Execute workflow steps
+    const context = {
+      query: message,
+      availableTools,
+      knowledgeBases,
+      ragContext: '',
+      toolResults: {},
+      citations: [],
+      clientInstructions: 'You are FUDSCAN - an AI-powered crypto risk scanner focused on identifying FUD and red flags.'
+    };
+
+    let finalAnswer = '';
+
+    for (const step of workflowPlan.workflow.steps) {
+      console.log(`🚀 Executing step: ${step.type} - ${step.name}`);
+
+      // Send step start event
+      sendEvent('step_start', {
+        stepId: `${step.type}_${Date.now()}`,
+        type: step.type,
+        name: step.name,
+        parameters: step.parameters,
+        tools: step.tools
+      });
+
+      // Execute the step
+      const stepResult = await aiWorkflowOrchestrator.executeWorkflowStep(step, message, context);
+
+      console.log(`✅ Step result:`, stepResult);
+
+      // Update context with results
+      if (step.type === 'rag_retrieving' && stepResult.contextText) {
+        context.ragContext = stepResult.contextText;
+
+        // Add RAG sources to citations
+        if (stepResult.sources && stepResult.sources.length > 0) {
+          context.citations.push(...stepResult.sources.map(source => ({
+            type: 'knowledge_base',
+            source: source.filename || source.title || 'Knowledge Base',
+            content: source.content || '',
+            metadata: source.metadata || {}
+          })));
+        }
+      }
+
+      if (step.type === 'api_calling' && stepResult.output) {
+        context.toolResults = { ...context.toolResults, ...stepResult.output };
+
+        // Add API tool sources to citations
+        if (step.tools && step.tools.length > 0) {
+          step.tools.forEach(toolName => {
+            const tool = availableTools.find(t => t.name === toolName);
+            const toolResult = stepResult.output[toolName];
+
+            context.citations.push({
+              type: 'api_tool',
+              source: tool?.name || toolName,
+              description: tool?.description || 'API Tool',
+              category: tool?.category || 'external',
+              success: toolResult?.success !== false,
+              data: toolResult
+            });
+          });
+        }
+      }
+
+      if (step.type === 'answer_generating' && stepResult.output) {
+        finalAnswer = stepResult.output;
+      }
+
+      // Send step complete event
+      sendEvent('step_complete', {
+        stepId: `${step.type}_${Date.now()}`,
+        stepType: step.type,
+        result: stepResult,
+        latencyMs: stepResult.latencyMs
+      });
+    }
+
+    // Add OpenAI model as a citation for answer generation
+    if (finalAnswer) {
+      context.citations.push({
+        type: 'ai_model',
+        source: 'OpenAI GPT-4o',
+        description: 'AI model used for final answer synthesis',
+        success: true
+      });
+    }
+
+    // Send final done event with sources
+    sendEvent('done', {
+      message: finalAnswer,
+      citations: context.citations,
+      toolResults: context.toolResults,
+      ragContext: context.ragContext ? 'RAG knowledge base consulted' : null,
+      latencyMs: Date.now(),
+      conversationId: `conv_${Date.now()}`
+    });
+
+    res.end();
 
   } catch (error) {
-    console.error('Chat error:', error);
-    return res.status(500).json({
-      message: 'Failed to generate response',
-      error: error.message
+    console.error('❌ Chat error:', error);
+
+    // If headers not sent yet, send JSON error
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: 'Failed to generate response',
+        error: error.message
+      });
+    }
+
+    // If streaming, send error event
+    res.write(`event: error\n`);
+    res.write(`data: ${JSON.stringify({ message: error.message, details: error.stack })}\n\n`);
+    res.end();
+  }
+}
+
+/**
+ * Get available API tools for the client
+ * For now, returns empty array - you can populate this with actual tools from database
+ */
+async function getAvailableTools(clientId) {
+  try {
+    // Try to get tools from database
+    const tools = await prisma.apiTool.findMany({
+      where: {
+        clientId: clientId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        category: true,
+        endpoint: true,
+        method: true,
+        parameters: true,
+        isExternal: true
+      }
     });
+
+    return tools;
+  } catch (error) {
+    console.warn('Could not fetch tools from database:', error.message);
+    // Return empty array if database not available
+    return [];
+  }
+}
+
+/**
+ * Get knowledge bases for the client
+ */
+async function getKnowledgeBases(clientId) {
+  try {
+    const kbs = await prisma.knowledgeBase.findMany({
+      where: {
+        clientId: clientId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true
+      }
+    });
+
+    return kbs;
+  } catch (error) {
+    console.warn('Could not fetch knowledge bases:', error.message);
+    return [];
   }
 }

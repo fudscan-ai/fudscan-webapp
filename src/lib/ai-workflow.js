@@ -12,7 +12,9 @@ const openai = new OpenAI({
  */
 export class AIWorkflowOrchestrator {
   constructor() {
-    this.systemPrompt = `You are an AI workflow orchestrator for a Web3 and DeFi analysis platform. Your job is to analyze user queries and determine the appropriate workflow.
+    this.systemPrompt = `You are FUDSCAN's AI workflow orchestrator - an AI-powered crypto risk scanner that helps investors identify FUD (Fear, Uncertainty, and Doubt) and red flags in crypto projects.
+
+Your job is to analyze user queries and determine the appropriate workflow to provide thorough due diligence analysis.
 
 Available workflow types:
 1. DIRECT_ANSWER - You can answer directly without additional tools
@@ -238,8 +240,18 @@ User Query: "${query}"
   async executeRagStep(step, query, context) {
     // Use existing RAG retrieve functionality
     const ragQuery = step.parameters?.query || context.ragQuery || query;
-    
+
     try {
+      // Check if RAG endpoint exists, otherwise return simulated result
+      if (!process.env.NEXT_PUBLIC_BASE_URL) {
+        console.warn('NEXT_PUBLIC_BASE_URL not configured, skipping RAG retrieval');
+        return {
+          output: [],
+          sources: [],
+          contextText: ''
+        };
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/rag/retrieve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,41 +262,82 @@ User Query: "${query}"
           options: { maxResults: 5 }
         })
       });
-      
+
+      if (!response.ok) {
+        console.warn(`RAG endpoint returned ${response.status}, skipping`);
+        return {
+          output: [],
+          sources: [],
+          contextText: ''
+        };
+      }
+
       const ragResult = await response.json();
-      
+
+      // Format sources properly
+      const formattedSources = (ragResult.sources || ragResult.context || []).map((source, idx) => ({
+        filename: source.filename || source.title || source.source || `Document ${idx + 1}`,
+        title: source.title || source.filename || 'Knowledge Base Document',
+        content: source.content || source.text || '',
+        metadata: source.metadata || {},
+        score: source.score || source.similarity || 0
+      }));
+
       return {
         output: ragResult.context || [],
-        sources: ragResult.sources || [],
-        contextText: ragResult.context?.map(c => c.content).join('\n\n') || ''
+        sources: formattedSources,
+        contextText: formattedSources.map(s => s.content).join('\n\n') || ''
       };
-      
+
     } catch (error) {
-      return { error: `RAG retrieval failed: ${error.message}` };
+      console.error('RAG retrieval error:', error);
+      return {
+        error: `RAG retrieval failed: ${error.message}`,
+        output: [],
+        sources: [],
+        contextText: ''
+      };
     }
   }
 
   async executeApiStep(step, query, context) {
     const results = {};
-    
+
+    // Handle case where no tools are specified
+    if (!step.tools || step.tools.length === 0) {
+      console.warn('No tools specified for api_calling step');
+      return { output: results };
+    }
+
     // Execute all tools in parallel
     const toolPromises = step.tools.map(async (toolName) => {
       try {
         const tool = context.availableTools?.find(t => t.name === toolName);
         if (!tool) {
-          return { [toolName]: { error: 'Tool not found' } };
+          console.warn(`Tool not found: ${toolName}`);
+          return { [toolName]: { success: false, error: 'Tool not found' } };
         }
 
+        console.log(`Calling tool: ${toolName}`);
         const response = await this.callTool(tool, step.parameters);
+
+        // Ensure response has success field
+        if (response && typeof response === 'object' && !('success' in response)) {
+          response.success = !response.error;
+        }
+
         return { [toolName]: response };
-        
+
       } catch (error) {
-        return { [toolName]: { error: error.message } };
+        console.error(`Tool ${toolName} failed:`, error);
+        return { [toolName]: { success: false, error: error.message } };
       }
     });
 
     const toolResults = await Promise.all(toolPromises);
     toolResults.forEach(result => Object.assign(results, result));
+
+    console.log('API step results:', results);
 
     return { output: results };
   }
@@ -295,20 +348,32 @@ User Query: "${query}"
     const toolResults = context.toolResults || {};
     const clientInstructions = context.clientInstructions || '';
 
-    let answerPrompt = `You are a helpful AI assistant specializing in Web3 and DeFi analysis.
+    let answerPrompt = `You are FUDSCAN - an AI-powered crypto risk scanner focused on identifying FUD and red flags in crypto projects.
 
-Client Instructions: ${clientInstructions}
+Your personality:
+- Professional due diligence analyst: thorough, skeptical, protective of investors
+- Focus on "why" not just "what" - explain the risks and reasoning
+- Use emojis sparingly and professionally (🔍 for scanning, ⚠️ for warnings, ✓ for good signs)
+
+Instructions: ${clientInstructions}
 
 User Query: "${query}"
 
-Available Context:
+Available Context from Analysis:
 ${contextText}
 
 Tool Results:
 ${JSON.stringify(toolResults, null, 2)}
 
--If the given context is invalid or useless, don't point it out; you can answer directly based on your ability.
--Please provide a comprehensive and helpful answer based on the available information. If you used external data, mention the sources appropriately.`;
+Guidelines:
+- If the context is insufficient, answer directly based on your knowledge
+- Highlight red flags and suspicious patterns prominently
+- Provide actionable insights for investors
+- Always remind users: "Smart investors do their homework. Always have, always will."
+- Be direct and honest about risks
+- Format your response clearly with sections if analyzing multiple aspects
+
+Provide a comprehensive FUD analysis based on the available information:`;
 
 console.log(answerPrompt);
   if (answerPrompt.length > 30000) {
@@ -319,7 +384,7 @@ console.log(answerPrompt);
       const response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'You are a helpful AI assistant specializing in Web3 and DeFi analysis.' },
+          { role: 'system', content: 'You are FUDSCAN - an AI-powered crypto risk scanner that helps investors identify red flags and make informed decisions.' },
           { role: 'user', content: answerPrompt }
         ],
         temperature: 0.7,

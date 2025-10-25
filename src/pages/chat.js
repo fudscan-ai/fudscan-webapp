@@ -1,9 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
-import { ChevronDownIcon, ChevronUpIcon, ExclamationTriangleIcon, CheckCircleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import WalletConnectButton from '@/components/WalletConnectButton';
 
@@ -11,7 +7,6 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentWorkflow, setCurrentWorkflow] = useState(null);
   const [expandedSteps, setExpandedSteps] = useState({});
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -68,7 +63,7 @@ export default function ChatPage() {
     try {
       abortControllerRef.current = new AbortController();
 
-      // Build conversation history (last 5 messages for context)
+      // Build conversation history (last 10 messages for context)
       const conversationHistory = messages.slice(-10).map(msg => ({
         type: msg.type,
         content: msg.content
@@ -81,7 +76,8 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           message: query,
-          conversationHistory: conversationHistory
+          conversationHistory: conversationHistory,
+          stream: true
         }),
         signal: abortControllerRef.current.signal
       });
@@ -91,21 +87,74 @@ export default function ChatPage() {
         throw new Error(error.message || 'Request failed');
       }
 
-      const data = await response.json();
+      // Check if it's a streaming response
+      const contentType = response.headers.get('content-type');
 
-      console.log('✅ Received from API:', data);
+      if (contentType && contentType.includes('text/event-stream')) {
+        // Handle Server-Sent Events (SSE) streaming
+        console.log('📡 Starting SSE stream...');
 
-      // Backend now properly extracts the message, just use it directly
-      const messageContent = data.message || '⚠️ No message received from server.';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-      console.log('📝 Displaying message:', messageContent);
+        while (true) {
+          const { done, value } = await reader.read();
 
-      updateLastMessage({
-        content: messageContent,
-        intent: data.intent,
-        coin: data.coin,
-        isStreaming: false
-      });
+          if (done) {
+            console.log('✅ Stream complete');
+            break;
+          }
+
+          // Decode and add to buffer
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE messages
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep incomplete line in buffer
+
+          let currentEvent = null;
+          let currentData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentData = line.slice(5).trim();
+            } else if (line === '' && currentEvent && currentData) {
+              // Complete event received
+              try {
+                const data = JSON.parse(currentData);
+                console.log(`📨 Event: ${currentEvent}`, data);
+                handleStreamEvent(currentEvent, data);
+              } catch (e) {
+                console.error('Failed to parse SSE data:', e, currentData);
+              }
+              currentEvent = null;
+              currentData = '';
+            }
+          }
+        }
+
+      } else {
+        // Handle non-streaming JSON response (fallback)
+        const data = await response.json();
+
+        console.log('✅ Received from API (non-streaming):', data);
+
+        const messageContent = data.message || data.reply || '⚠️ No message received from server.';
+
+        console.log('📝 Displaying message:', messageContent);
+
+        updateLastMessage({
+          content: messageContent,
+          intent: data.intent,
+          coin: data.coin,
+          workflow: data.workflow,
+          citations: data.citations || [],
+          isStreaming: false
+        });
+      }
 
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -115,7 +164,7 @@ export default function ChatPage() {
           error: true
         });
       } else {
-        console.error('Chat error:', error);
+        console.error('❌ Chat error:', error);
         updateLastMessage({
           content: `Error: ${error.message}`,
           isStreaming: false,
@@ -133,7 +182,6 @@ export default function ChatPage() {
 
     switch (event) {
       case 'workflow_plan':
-        setCurrentWorkflow(data);
         updateLastMessage({
           workflow: data,
           steps: []
@@ -184,21 +232,36 @@ export default function ChatPage() {
         break;
 
       case 'citations':
-        updateLastMessage(prev => ({
+        updateLastMessage({
           citations: data
-        }));
+        });
         break;
 
       case 'token':
         break;
 
       case 'done':
-        updateLastMessage({
-          isStreaming: false,
-          latencyMs: data.latencyMs,
-          conversationId: data.conversationId
-        });
-        setCurrentWorkflow(null);
+        // Only update content if we have a message
+        if (data.message) {
+          updateLastMessage({
+            content: data.message,
+            citations: data.citations || [],
+            toolResults: data.toolResults || {},
+            ragContext: data.ragContext,
+            isStreaming: false,
+            latencyMs: data.latencyMs,
+            conversationId: data.conversationId
+          });
+        } else {
+          updateLastMessage({
+            citations: data.citations || [],
+            toolResults: data.toolResults || {},
+            ragContext: data.ragContext,
+            isStreaming: false,
+            latencyMs: data.latencyMs,
+            conversationId: data.conversationId
+          });
+        }
         break;
 
       case 'error':
@@ -208,7 +271,6 @@ export default function ChatPage() {
           error: true,
           errorDetails: data.details
         });
-        setCurrentWorkflow(null);
         break;
 
       default:
@@ -234,7 +296,7 @@ export default function ChatPage() {
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  const getStepIcon = (stepType, status) => {
+  const getStepIcon = (_stepType, status) => {
     if (status === 'running') {
       return '⏳';
     }
@@ -344,19 +406,19 @@ export default function ChatPage() {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({children}) => <div style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', marginTop: '20px'}}>{children}</div>,
-          h2: ({children}) => <div style={{fontSize: '20px', fontWeight: 'bold', marginBottom: '14px', marginTop: '18px'}}>{children}</div>,
-          h3: ({children}) => <div style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', marginTop: '16px'}}>{children}</div>,
-          p: ({children}) => <div style={{fontSize: '16px', marginBottom: '16px', lineHeight: '1.7'}}>{children}</div>,
-          ul: ({children}) => <ul style={{fontSize: '16px', marginBottom: '16px', paddingLeft: '20px', lineHeight: '1.7'}}>{children}</ul>,
-          ol: ({children}) => <ol style={{fontSize: '16px', marginBottom: '16px', paddingLeft: '20px', lineHeight: '1.7'}}>{children}</ol>,
-          li: ({children}) => <li style={{marginBottom: '8px'}}>{children}</li>,
+          h1: ({children}) => <div style={{fontSize: '22px', fontWeight: 'bold', marginBottom: '12px', marginTop: '16px'}}>{children}</div>,
+          h2: ({children}) => <div style={{fontSize: '19px', fontWeight: 'bold', marginBottom: '10px', marginTop: '14px'}}>{children}</div>,
+          h3: ({children}) => <div style={{fontSize: '17px', fontWeight: 'bold', marginBottom: '8px', marginTop: '12px'}}>{children}</div>,
+          p: ({children}) => <div style={{fontSize: '16px', marginBottom: '12px', lineHeight: '1.5'}}>{children}</div>,
+          ul: ({children}) => <ul style={{fontSize: '16px', marginBottom: '12px', paddingLeft: '20px', lineHeight: '1.5'}}>{children}</ul>,
+          ol: ({children}) => <ol style={{fontSize: '16px', marginBottom: '12px', paddingLeft: '20px', lineHeight: '1.5'}}>{children}</ol>,
+          li: ({children}) => <li style={{marginBottom: '6px'}}>{children}</li>,
           code: ({inline, children}) =>
             inline ?
               <code style={{fontFamily: 'Monaco, Courier, monospace', fontSize: '15px', padding: '2px 6px', backgroundColor: 'rgba(0,0,0,0.1)'}}>{children}</code> :
-              <code style={{display: 'block', fontFamily: 'Monaco, Courier, monospace', fontSize: '15px', padding: '16px', backgroundColor: 'rgba(0,0,0,0.05)', overflow: 'auto', marginBottom: '16px', lineHeight: '1.5'}}>{children}</code>,
-          pre: ({children}) => <pre style={{marginBottom: '16px'}}>{children}</pre>,
-          blockquote: ({children}) => <div style={{fontSize: '16px', paddingLeft: '16px', marginBottom: '16px', opacity: 0.9}}>{children}</div>,
+              <code style={{display: 'block', fontFamily: 'Monaco, Courier, monospace', fontSize: '15px', padding: '12px', backgroundColor: 'rgba(0,0,0,0.05)', overflow: 'auto', marginBottom: '12px', lineHeight: '1.4'}}>{children}</code>,
+          pre: ({children}) => <pre style={{marginBottom: '12px'}}>{children}</pre>,
+          blockquote: ({children}) => <div style={{fontSize: '16px', paddingLeft: '16px', marginBottom: '12px', opacity: 0.9}}>{children}</div>,
           a: ({href, children}) => <a href={href} style={{fontSize: '16px', textDecoration: 'underline'}} target="_blank" rel="noopener noreferrer">{children}</a>,
           strong: ({children}) => <strong style={{fontWeight: 'bold'}}>{children}</strong>,
           em: ({children}) => <em style={{fontStyle: 'italic'}}>{children}</em>,
@@ -381,7 +443,6 @@ export default function ChatPage() {
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
             <div style={{textAlign: 'center', flex: 1}}>
               <div className="mac-heading" style={{marginBottom: '8px'}}>FUDScan: The Ultimate FOMO/FUD Risk Scanner</div>
-              <div className="mac-text-sm">Turn every investor into a professional FUD-buster</div>
             </div>
             <div style={{marginLeft: '20px'}}>
               <WalletConnectButton />
@@ -436,14 +497,14 @@ export default function ChatPage() {
 
                     {/* Workflow Plan */}
                     {message.workflow && (
-                      <div className="inner-border" style={{padding: '10px', marginBottom: '10px'}}>
-                        <div className="mac-text-sm" style={{fontWeight: 'bold', marginBottom: '5px'}}>
+                      <div className="inner-border" style={{padding: '16px', marginBottom: '16px'}}>
+                        <div style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '8px'}}>
                           Analysis Mode: {message.workflow.intent === 'DIRECT_ANSWER' ? 'Direct Answer' : 'Tool Enhanced'}
                         </div>
-                        <div className="mac-text-sm" style={{marginBottom: '5px'}}>
+                        <div style={{fontSize: '16px', marginBottom: '8px'}}>
                           Confidence: {(message.workflow.confidence * 100).toFixed(0)}%
                         </div>
-                        <div className="mac-text-sm">
+                        <div style={{fontSize: '15px', lineHeight: '1.5'}}>
                           {message.workflow.reasoning}
                         </div>
                       </div>
@@ -526,14 +587,96 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Citations */}
+                    {/* Citations / Data Sources */}
                     {message.citations && message.citations.length > 0 && (
-                      <div style={{marginTop: '20px', padding: '12px', backgroundColor: 'rgba(0,0,0,0.03)'}}>
-                        <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '8px'}}>References:</div>
+                      <div style={{marginTop: '20px', padding: '16px', backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: '4px'}}>
+                        <div style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '12px'}}>📊 Data Sources Used:</div>
                         {message.citations.map((citation, index) => (
-                          <div key={index} style={{fontSize: '14px', marginBottom: '4px'}}>• {citation.filename || citation.source}</div>
+                          <div key={index} style={{fontSize: '15px', marginBottom: '10px', paddingLeft: '12px', borderLeft: '3px solid rgba(0,0,0,0.2)'}}>
+                            <div style={{fontWeight: 'bold', marginBottom: '4px'}}>
+                              {citation.type === 'api_tool' && '🛠️ '}
+                              {citation.type === 'knowledge_base' && '📚 '}
+                              {citation.type === 'ai_model' && '🤖 '}
+                              {citation.source}
+                              {citation.success === false && ' ❌'}
+                              {citation.success === true && ' ✓'}
+                            </div>
+                            {citation.description && (
+                              <div style={{fontSize: '14px', opacity: 0.8, marginBottom: '4px'}}>{citation.description}</div>
+                            )}
+                            {citation.category && (
+                              <div style={{fontSize: '13px', opacity: 0.6}}>Category: {citation.category}</div>
+                            )}
+                            {citation.type === 'api_tool' && citation.data && (
+                              <details style={{fontSize: '13px', marginTop: '6px', cursor: 'pointer'}}>
+                                <summary style={{opacity: 0.7, userSelect: 'none'}}>View raw data</summary>
+                                <pre style={{
+                                  marginTop: '8px',
+                                  padding: '8px',
+                                  backgroundColor: 'rgba(0,0,0,0.05)',
+                                  borderRadius: '4px',
+                                  overflow: 'auto',
+                                  maxHeight: '200px',
+                                  fontSize: '12px',
+                                  lineHeight: '1.4'
+                                }}>
+                                  {JSON.stringify(citation.data, null, 2)}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
                         ))}
                       </div>
+                    )}
+
+                    {/* RAG Context Indicator */}
+                    {message.ragContext && (
+                      <div style={{marginTop: '12px', padding: '12px', backgroundColor: 'rgba(0,100,255,0.05)', borderRadius: '4px', fontSize: '14px'}}>
+                        💡 {message.ragContext}
+                      </div>
+                    )}
+
+                    {/* Tool Results Summary */}
+                    {message.toolResults && Object.keys(message.toolResults).length > 0 && (
+                      <details style={{marginTop: '12px', cursor: 'pointer'}}>
+                        <summary style={{
+                          fontSize: '15px',
+                          fontWeight: 'bold',
+                          padding: '12px',
+                          backgroundColor: 'rgba(0,0,0,0.02)',
+                          borderRadius: '4px',
+                          userSelect: 'none'
+                        }}>
+                          🔍 View All Tool Results ({Object.keys(message.toolResults).length} tools)
+                        </summary>
+                        <div style={{
+                          marginTop: '8px',
+                          padding: '12px',
+                          backgroundColor: 'rgba(0,0,0,0.03)',
+                          borderRadius: '4px'
+                        }}>
+                          {Object.entries(message.toolResults).map(([toolName, result], index) => (
+                            <div key={index} style={{marginBottom: '16px'}}>
+                              <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '8px'}}>
+                                {toolName}
+                                {result?.success === false && ' ❌'}
+                                {result?.success === true && ' ✓'}
+                              </div>
+                              <pre style={{
+                                padding: '8px',
+                                backgroundColor: 'rgba(0,0,0,0.05)',
+                                borderRadius: '4px',
+                                overflow: 'auto',
+                                maxHeight: '300px',
+                                fontSize: '12px',
+                                lineHeight: '1.4'
+                              }}>
+                                {JSON.stringify(result, null, 2)}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
                     )}
 
                     <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px', fontSize: '12px', opacity: 0.5}}>
