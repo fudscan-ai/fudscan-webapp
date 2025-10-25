@@ -49,7 +49,10 @@
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "uint8arrays": "^5.1.0",
-    "viem": "^2.34.0"
+    "viem": "^2.34.0",
+    "wagmi": "^2.14.8",
+    "@tanstack/react-query": "^5.62.14",
+    "@coinbase/wallet-sdk": "^4.3.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
