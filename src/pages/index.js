@@ -477,11 +477,11 @@ export default function ChatPage() {
     <div className="min-h-screen bg-gray-900 text-white flex flex-col pixel-text">
       {/* Header */}
       <div className="nes-container is-dark with-title mb-4">
-        <p className="title">COINTEXT</p>
+        <p className="title">FUDSCAN</p>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="text-white">
-            <div className="pixel-text-lg">COINTEXT</div>
-            <div className="pixel-text-sm text-gray-300 mt-2">Context for every coin</div>
+            <div className="pixel-text-lg">FUDSCAN</div>
+            <div className="pixel-text-sm text-gray-300 mt-2">The Ultimate FOMO/FUD Risk Scanner</div>
           </div>
           <div className="flex items-center space-x-4">
             <input
@@ -512,9 +512,9 @@ export default function ChatPage() {
           {messages.length === 0 && (
             <div className="nes-container is-dark with-title text-center">
               <p className="title">WELCOME</p>
-              <div className="pixel-text text-white mb-4">The knowledge base for every chain, every platform.</div>
+              <div className="pixel-text text-white mb-4">Turn every investor into a professional FUD-buster.</div>
               <div className="pixel-text-sm text-gray-300">
-                Real-time intelligence with institutional-grade precision.
+                Instant AI due diligence for whitepapers, contracts, and teams.
               </div>
             </div>
           )}
@@ -530,7 +530,7 @@ export default function ChatPage() {
                   </div>
                 ) : (
                   <div>
-                    <div className="pixel-text-sm text-white mb-2">COINTEXT</div>
+                    <div className="pixel-text-sm text-white mb-2">FUDSCAN</div>
                     
                     {/* Workflow Plan */}
                     {message.workflow && (
@@ -718,7 +718,7 @@ export default function ChatPage() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="ASK COINTEXT..."
+              placeholder="ASK FUDSCAN..."
               disabled={isLoading || !apiKey}
               className="nes-input is-dark flex-1 pixel-text"
             />
@@ -742,7 +742,7 @@ export default function ChatPage() {
           )}
           
           <div className="pixel-text-sm text-gray-400 mt-2">
-            POWERING AIBRK, FUDCAN, VIRTUALS, BASE, BSC, ALGORAND — AND BEYOND. TRY: &quot;WHAT&apos;S TRENDING ON VIRTUALS TODAY?&quot;
+SCAN WHITEPAPERS • CHECK TEAMS • DETECT RED FLAGS • GET FUD INDEX. TRY: &quot;SCAN THIS WHITEPAPER FOR RED FLAGS&quot;
           </div>
         </div>
       </div>

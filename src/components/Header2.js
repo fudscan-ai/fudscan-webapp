@@ -9,12 +9,12 @@ export default function Header2() {
           
           <div className="text-xs leading-tight transition-colors">
             <div>
-              <Link 
+              <Link
                 target="_blank"
                 href="https://x.com/AI_BRK/status/1955356973949714822"
                 className="underline cursor-pointer"
               >
-                COINTEXT
+                FUDSCAN
               </Link>
             </div>
             <div>

@@ -14,7 +14,7 @@ export default function Header() {
               <span className="text-xl"><em style={{fontStyle: 'normal'}} className="text-4xl ">B</em>ERKSHIRE</span>
               <span className="text-xl"><em style={{fontStyle: 'normal'}} className="text-4xl ">H</em>ATHAWAY</span>
             </div>
-            <div className="text-xs text-gray-500 mt-1">Powered by <a href="https://www.cointext.org/chat" className="underline hover:text-gray-300 transition-colors">Cointext</a></div>
+            <div className="text-xs text-gray-500 mt-1">Powered by <a href="/chat" className="underline hover:text-gray-300 transition-colors">FUDSCAN</a></div>
           </div>
         </div>
 
@@ -22,10 +22,10 @@ export default function Header() {
         <div className="text-gray-500">
           <div className="text-xs text-right hover:text-gray-300 transition-colors">
             <div>
-              <Link 
-                href="/fund" 
+              <Link
+                href="/fund"
               >
-                COINTEXT
+                FUDSCAN
               </Link>
             </div>
             <div>
