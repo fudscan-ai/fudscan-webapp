@@ -11,7 +11,6 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(process.env.NEXT_PUBLIC_DEFAULT_API_KEY || '');
   const [currentWorkflow, setCurrentWorkflow] = useState(null);
   const [expandedSteps, setExpandedSteps] = useState({});
   const messagesEndRef = useRef(null);
@@ -42,7 +41,7 @@ export default function ChatPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputValue.trim() || !apiKey.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading) return;
 
     const userMessage = {
       id: Date.now(),
@@ -56,8 +55,6 @@ export default function ChatPage() {
       type: 'assistant',
       content: '',
       timestamp: new Date(),
-      workflow: null,
-      steps: [],
       isStreaming: true
     };
 
@@ -67,21 +64,25 @@ export default function ChatPage() {
     const query = inputValue;
     setInputValue('');
     setIsLoading(true);
-    setCurrentWorkflow(null);
 
     try {
       abortControllerRef.current = new AbortController();
 
-      const queryParams = new URLSearchParams({
-        query: query,
-        options: JSON.stringify({})
-      });
+      // Build conversation history (last 5 messages for context)
+      const conversationHistory = messages.slice(-10).map(msg => ({
+        type: msg.type,
+        content: msg.content
+      }));
 
-      const response = await fetch(`/api/ai/ask?${queryParams}`, {
-        method: 'GET',
+      const response = await fetch('/api/chat', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          message: query,
+          conversationHistory: conversationHistory
+        }),
         signal: abortControllerRef.current.signal
       });
 
@@ -90,36 +91,15 @@ export default function ChatPage() {
         throw new Error(error.message || 'Request failed');
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      const data = await response.json();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.trim() === '') continue;
-
-          if (line.startsWith('event: ')) {
-            const event = line.slice(7);
-            if (i + 1 < lines.length && lines[i + 1].startsWith('data: ')) {
-              try {
-                const data = JSON.parse(lines[i + 1].slice(6));
-                handleStreamEvent(event, data);
-              } catch (error) {
-                console.error('Failed to parse event data:', error, lines[i + 1]);
-              }
-              i++;
-            }
-          }
-        }
-      }
+      // Update assistant message with response
+      updateLastMessage({
+        content: data.message,
+        intent: data.intent,
+        coin: data.coin,
+        isStreaming: false
+      });
 
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -356,31 +336,22 @@ export default function ChatPage() {
 
     return (
       <ReactMarkdown
-        className="markdown-content"
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeSanitize]}
         components={{
-          h1: ({children}) => <h1 style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', marginTop: '12px'}}>{children}</h1>,
-          h2: ({children}) => <h2 style={{fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', marginTop: '10px'}}>{children}</h2>,
-          h3: ({children}) => <h3 style={{fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', marginTop: '8px'}}>{children}</h3>,
-          p: ({children}) => <p style={{marginBottom: '8px', lineHeight: '1.5'}}>{children}</p>,
-          ul: ({children}) => <ul style={{listStyleType: 'disc', listStylePosition: 'inside', marginBottom: '8px', paddingLeft: '12px'}}>{children}</ul>,
-          ol: ({children}) => <ol style={{listStyleType: 'decimal', listStylePosition: 'inside', marginBottom: '8px', paddingLeft: '12px'}}>{children}</ol>,
-          li: ({children}) => <li style={{marginBottom: '2px'}}>{children}</li>,
+          h1: ({children}) => <div style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', marginTop: '20px'}}>{children}</div>,
+          h2: ({children}) => <div style={{fontSize: '20px', fontWeight: 'bold', marginBottom: '14px', marginTop: '18px'}}>{children}</div>,
+          h3: ({children}) => <div style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', marginTop: '16px'}}>{children}</div>,
+          p: ({children}) => <div style={{fontSize: '16px', marginBottom: '16px', lineHeight: '1.7'}}>{children}</div>,
+          ul: ({children}) => <ul style={{fontSize: '16px', marginBottom: '16px', paddingLeft: '20px', lineHeight: '1.7'}}>{children}</ul>,
+          ol: ({children}) => <ol style={{fontSize: '16px', marginBottom: '16px', paddingLeft: '20px', lineHeight: '1.7'}}>{children}</ol>,
+          li: ({children}) => <li style={{marginBottom: '8px'}}>{children}</li>,
           code: ({inline, children}) =>
             inline ?
-              <code style={{fontFamily: 'Monaco, Courier, monospace', fontSize: '11px', padding: '2px 4px', border: '1px solid'}}>{children}</code> :
-              <code style={{display: 'block', fontFamily: 'Monaco, Courier, monospace', fontSize: '10px', padding: '8px', border: '2px solid', overflow: 'auto', marginBottom: '8px'}}>{children}</code>,
-          pre: ({children}) => <pre style={{marginBottom: '8px'}}>{children}</pre>,
-          blockquote: ({children}) => <blockquote style={{borderLeft: '4px solid', paddingLeft: '12px', marginBottom: '8px', fontStyle: 'italic'}}>{children}</blockquote>,
-          a: ({href, children}) => <a href={href} style={{textDecoration: 'underline'}} target="_blank" rel="noopener noreferrer">{children}</a>,
-          table: ({children}) => <table style={{width: '100%', border: '2px solid', marginBottom: '8px', borderCollapse: 'collapse'}}>{children}</table>,
-          thead: ({children}) => <thead>{children}</thead>,
-          tbody: ({children}) => <tbody>{children}</tbody>,
-          tr: ({children}) => <tr style={{borderBottom: '1px solid'}}>{children}</tr>,
-          th: ({children}) => <th style={{padding: '6px', textAlign: 'left', fontWeight: 'bold', borderRight: '1px solid'}}>{children}</th>,
-          td: ({children}) => <td style={{padding: '6px', borderRight: '1px solid'}}>{children}</td>,
-          hr: () => <hr style={{margin: '16px 0', borderTop: '2px solid'}} />,
+              <code style={{fontFamily: 'Monaco, Courier, monospace', fontSize: '15px', padding: '2px 6px', backgroundColor: 'rgba(0,0,0,0.1)'}}>{children}</code> :
+              <code style={{display: 'block', fontFamily: 'Monaco, Courier, monospace', fontSize: '15px', padding: '16px', backgroundColor: 'rgba(0,0,0,0.05)', overflow: 'auto', marginBottom: '16px', lineHeight: '1.5'}}>{children}</code>,
+          pre: ({children}) => <pre style={{marginBottom: '16px'}}>{children}</pre>,
+          blockquote: ({children}) => <div style={{fontSize: '16px', paddingLeft: '16px', marginBottom: '16px', opacity: 0.9}}>{children}</div>,
+          a: ({href, children}) => <a href={href} style={{fontSize: '16px', textDecoration: 'underline'}} target="_blank" rel="noopener noreferrer">{children}</a>,
           strong: ({children}) => <strong style={{fontWeight: 'bold'}}>{children}</strong>,
           em: ({children}) => <em style={{fontStyle: 'italic'}}>{children}</em>,
         }}
@@ -443,17 +414,16 @@ export default function ChatPage() {
           )}
 
           {messages.map((message) => (
-            <div key={message.id} style={{marginBottom: '20px'}}>
-              <div className="standard-dialog">
-                {message.type === 'user' ? (
-                  <div>
-                    <div className="mac-text-sm" style={{fontWeight: 'bold', marginBottom: '5px'}}>YOU</div>
-                    <div className="mac-text">{message.content}</div>
-                    <div className="mac-text-sm" style={{marginTop: '5px', opacity: 0.7}}>{formatTimestamp(message.timestamp)}</div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="mac-text-sm" style={{fontWeight: 'bold', marginBottom: '5px'}}>FUDSCAN AI</div>
+            <div key={message.id} style={{marginBottom: '30px', padding: '20px', backgroundColor: message.type === 'assistant' ? 'rgba(0,0,0,0.02)' : 'transparent'}}>
+              {message.type === 'user' ? (
+                <div>
+                  <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', opacity: 0.6}}>YOU</div>
+                  <div style={{fontSize: '16px', lineHeight: '1.6'}}>{message.content}</div>
+                  <div style={{fontSize: '12px', marginTop: '10px', opacity: 0.5}}>{formatTimestamp(message.timestamp)}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', opacity: 0.6}}>FUDSCAN AI</div>
 
                     {/* Workflow Plan */}
                     {message.workflow && (
@@ -525,11 +495,11 @@ export default function ChatPage() {
                     )}
 
                     {/* Content */}
-                    <div className="mac-text">
+                    <div style={{fontSize: '16px'}}>
                       {message.error ? (
-                        <div className="standard-dialog" style={{padding: '10px', border: '2px solid'}}>
-                          <div className="mac-text-sm" style={{fontWeight: 'bold', marginBottom: '5px'}}>ERROR</div>
-                          <div className="mac-text">{message.content}</div>
+                        <div style={{padding: '16px', backgroundColor: 'rgba(255,0,0,0.1)', marginBottom: '16px'}}>
+                          <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '8px'}}>ERROR</div>
+                          <div style={{fontSize: '16px'}}>{message.content}</div>
                         </div>
                       ) : (
                         <div>
@@ -537,11 +507,11 @@ export default function ChatPage() {
                             <div>
                               {renderMarkdownContent(message.content)}
                               {message.isStreaming && (
-                                <span style={{display: 'inline-block', width: '8px', height: '12px', backgroundColor: 'var(--secondary)', marginLeft: '2px', animation: 'blink 1s infinite'}} />
+                                <span style={{display: 'inline-block', width: '10px', height: '18px', backgroundColor: '#000', marginLeft: '4px', animation: 'blink 1s infinite'}} />
                               )}
                             </div>
                           ) : message.isStreaming ? (
-                            <div className="mac-text-sm">Processing...</div>
+                            <div style={{fontSize: '16px', opacity: 0.6}}>Processing...</div>
                           ) : null}
                         </div>
                       )}
@@ -549,23 +519,22 @@ export default function ChatPage() {
 
                     {/* Citations */}
                     {message.citations && message.citations.length > 0 && (
-                      <div className="standard-dialog" style={{marginTop: '10px', padding: '8px'}}>
-                        <div className="mac-text-sm" style={{fontWeight: 'bold', marginBottom: '5px'}}>References:</div>
+                      <div style={{marginTop: '20px', padding: '12px', backgroundColor: 'rgba(0,0,0,0.03)'}}>
+                        <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '8px'}}>References:</div>
                         {message.citations.map((citation, index) => (
-                          <div key={index} className="mac-text-sm">• {citation.filename || citation.source}</div>
+                          <div key={index} style={{fontSize: '14px', marginBottom: '4px'}}>• {citation.filename || citation.source}</div>
                         ))}
                       </div>
                     )}
 
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '10px'}}>
-                      <div className="mac-text-sm" style={{opacity: 0.7}}>{formatTimestamp(message.timestamp)}</div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px', fontSize: '12px', opacity: 0.5}}>
+                      <div>{formatTimestamp(message.timestamp)}</div>
                       {message.latencyMs && (
-                        <div className="mac-text-sm">Response: {message.latencyMs}ms</div>
+                        <div>Response: {message.latencyMs}ms</div>
                       )}
                     </div>
                   </div>
                 )}
-              </div>
             </div>
           ))}
           <div ref={messagesEndRef} />
@@ -589,7 +558,7 @@ export default function ChatPage() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Ask FUDSCAN..."
-                disabled={isLoading || !apiKey}
+                disabled={isLoading}
                 style={{flex: 1, padding: '5px', fontFamily: 'Chicago_12, Monaco, monospace'}}
               />
             </div>
@@ -597,19 +566,13 @@ export default function ChatPage() {
             <div className="field-row">
               <button
                 type="submit"
-                disabled={isLoading || !inputValue.trim() || !apiKey}
+                disabled={isLoading || !inputValue.trim()}
                 className="btn-default"
               >
                 {isLoading ? 'Processing...' : 'Scan'}
               </button>
             </div>
           </form>
-
-          {!apiKey && (
-            <div className="mac-text-sm" style={{marginTop: '10px', textAlign: 'center'}}>
-              Please set API key in environment variables
-            </div>
-          )}
 
           <div className="mac-text-sm" style={{marginTop: '10px', textAlign: 'center'}}>
             Scan whitepapers, contracts, and teams for risk and red flags
