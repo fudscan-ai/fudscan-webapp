@@ -442,7 +442,7 @@ export default function ChatPage() {
         <div className="modeless-dialog">
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
             <div style={{textAlign: 'center', flex: 1}}>
-              <div className="mac-heading" style={{marginBottom: '8px'}}>FUDScan: The Ultimate FOMO/FUD Risk Scanner</div>
+              <div className="mac-heading" style={{marginBottom: '8px'}}>FUDScan: The Ultimate CryptoDue Diligence Scanner</div>
             </div>
             <div style={{marginLeft: '20px'}}>
               <WalletConnectButton />

@@ -481,7 +481,7 @@ export default function ChatPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="text-white">
             <div className="pixel-text-lg">FUDSCAN</div>
-            <div className="pixel-text-sm text-gray-300 mt-2">The Ultimate FOMO/FUD Risk Scanner</div>
+            <div className="pixel-text-sm text-gray-300 mt-2">The Ultimate Cyrpto Due Diligence Risk Scanner</div>
           </div>
           <div className="flex items-center space-x-4">
             <input
