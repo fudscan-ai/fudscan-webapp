@@ -93,9 +93,15 @@ export default function ChatPage() {
 
       const data = await response.json();
 
-      // Update assistant message with response
+      console.log('✅ Received from API:', data);
+
+      // Backend now properly extracts the message, just use it directly
+      const messageContent = data.message || '⚠️ No message received from server.';
+
+      console.log('📝 Displaying message:', messageContent);
+
       updateLastMessage({
-        content: data.message,
+        content: messageContent,
         intent: data.intent,
         coin: data.coin,
         isStreaming: false
@@ -404,11 +410,14 @@ export default function ChatPage() {
 
         <div className="window-pane" style={{flex: 1, overflowY: 'auto'}}>
           {messages.length === 0 && (
-            <div style={{textAlign: 'center', padding: '40px 20px'}}>
-              <div className="mac-text" style={{marginBottom: '10px'}}>Welcome to FUDScan</div>
-              <div className="mac-text-sm">
+            <div style={{textAlign: 'center', padding: '80px 40px', maxWidth: '800px', margin: '0 auto'}}>
+              <div style={{fontSize: '32px', fontWeight: 'bold', marginBottom: '24px', lineHeight: '1.3'}}>
+                Welcome to FUDScan
+              </div>
+              <div style={{fontSize: '20px', lineHeight: '1.8', opacity: 0.8}}>
                 Drop any whitepaper, contract address, or project website.
-                <br/>Get instant AI due diligence.
+                <br/>
+                Get instant AI due diligence.
               </div>
             </div>
           )}

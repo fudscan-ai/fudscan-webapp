@@ -52,8 +52,13 @@ async function generateResponse(message, conversationContext = '') {
     "reply": "..."
   }
 
-Return JSON:
+**IMPORTANT: Always return ONLY valid JSON. No markdown, no code blocks, no extra text.**
+
+Return format (must be valid JSON only):
 {"intent": "...", "coin": "...", "reply": "..."}
+
+Example valid response:
+{"intent": "project_scan", "coin": "Bitcoin", "reply": "Got it — analyzing the project for red flags 🔍\nI'll check for: suspicious patterns, copied code, team background, and common scam indicators."}
 `;
 
 
@@ -75,6 +80,7 @@ Return JSON:
     const response = await client.chat.completions.create({
         model: 'gpt-4o',
         messages: messages,
+        response_format: { type: "json_object" }
     })
     // console.log(response);
     return response.choices[0].message.content
