@@ -25,29 +25,29 @@ function extractBearerToken(req) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
+  if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
   try {
-    const { query, options } = req.query;
-    const parsedOptions = options ? JSON.parse(options) : {};
+    const { query, options, apiKey } = req.body;
+    const parsedOptions = options || {};
 
     if (!query) {
       return res.status(400).json({ message: 'Query is required' });
     }
 
-    // Extract API key from Authorization header
-    const apiKey = extractBearerToken(req);
-    if (!apiKey) {
-      return res.status(401).json({ message: 'Authorization header with Bearer token is required' });
+    // Extract API key from body or Authorization header
+    let clientApiKey = apiKey || extractBearerToken(req);
+    if (!clientApiKey) {
+      return res.status(401).json({ message: 'API key is required in body or Authorization header' });
     }
 
     // Validate client and get available resources
     const client = await prisma.client.findFirst({
-      where: { 
-        apiKey: apiKey,
-        isActive: true 
+      where: {
+        apiKey: clientApiKey,
+        isActive: true
       },
       include: {
         knowledgeBases: {
@@ -221,18 +221,22 @@ export default async function handler(req, res) {
           stepId: workflowStep.id
         });
 
-        // Execute the step
+        // Execute the step with streaming callback for answer generation
         const stepResult = await aiWorkflow.executeWorkflowStep(
-          step, 
-          query, 
+          step,
+          query,
           {
-            apiKey: apiKey,
+            apiKey: clientApiKey,
             knowledgeBaseId: client.knowledgeBases[0]?.id,
             ragQuery: workflowPlan.workflow.ragQuery,
             ragContext: ragContext,
             toolResults: toolResults,
             clientInstructions: client.instructions,
-            availableTools: apiTools
+            availableTools: apiTools,
+            onChunk: step.type === 'answer_generating' ? (chunk) => {
+              // Send streaming chunk for answer generation
+              sendEvent('answer_chunk', { chunk });
+            } : undefined
           }
         );
 
@@ -314,14 +318,18 @@ export default async function handler(req, res) {
 
       // Execute final answer generation with all collected context
       const finalResult = await aiWorkflow.executeWorkflowStep(
-        finalAnswerStep, 
-        query, 
+        finalAnswerStep,
+        query,
         {
-          apiKey: apiKey,
+          apiKey: clientApiKey,
           ragContext: ragContext,
           toolResults: toolResults,
           clientInstructions: client.instructions,
-          availableTools: apiTools
+          availableTools: apiTools,
+          onChunk: (chunk) => {
+            // Send streaming chunk for final answer generation
+            sendEvent('answer_chunk', { chunk });
+          }
         }
       );
 

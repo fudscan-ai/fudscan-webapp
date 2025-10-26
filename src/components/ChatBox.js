@@ -132,7 +132,7 @@ export default function ChatBox({
 
   const handleStreamEvent = (event, data) => {
     console.log('ChatBox stream event:', event, data); // Debug log
-    
+
     switch (event) {
       case 'workflow_plan':
         updateLastMessage({ workflow: data, steps: [] });
@@ -140,27 +140,36 @@ export default function ChatBox({
 
       case 'step_start':
         updateLastMessage(prev => ({
-          steps: [...(prev.steps || []), { 
-            ...data, 
-            status: 'running', 
+          steps: [...(prev.steps || []), {
+            ...data,
+            status: 'running',
             startTime: Date.now(),
             id: data.stepId || `${data.type}_${Date.now()}`
           }]
         }));
         break;
 
+      case 'answer_chunk':
+        // Append streaming chunk to message content
+        updateLastMessage(prev => ({
+          content: (prev.content || '') + data.chunk
+        }));
+        break;
+
       case 'step_complete':
         updateLastMessage(prev => ({
-          steps: (prev.steps || []).map(step => 
+          steps: (prev.steps || []).map(step =>
             (step.stepId === data.stepId || step.id === data.stepId || step.type === data.type)
               ? { ...step, status: 'completed', result: data.result, endTime: Date.now() }
               : step
           )
         }));
 
-        // If this is the answer generating step, extract the answer
+        // If this is the answer generating step and no streaming happened, use the full output
         if (data.type === 'answer_generating' && data.result?.output) {
-          updateLastMessage({ content: data.result.output });
+          updateLastMessage(prev => ({
+            content: prev.content || data.result.output
+          }));
         }
         break;
 

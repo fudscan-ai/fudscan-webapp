@@ -347,6 +347,7 @@ User Query: "${query}"
     const contextText = context.ragContext || '';
     const toolResults = context.toolResults || {};
     const clientInstructions = context.clientInstructions || '';
+    const onChunk = context.onChunk; // Callback for streaming chunks
 
     let answerPrompt = `You are FUDSCAN - an AI-powered crypto risk scanner focused on identifying FUD and red flags in crypto projects.
 
@@ -389,13 +390,29 @@ console.log(answerPrompt);
         ],
         temperature: 0.7,
         max_tokens: 2000,
+        stream: true, // Enable streaming
       });
 
+      // Collect full response while streaming
+      let fullResponse = '';
+
+      for await (const chunk of response) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullResponse += content;
+
+          // Send chunk via callback if provided
+          if (onChunk && typeof onChunk === 'function') {
+            onChunk(content);
+          }
+        }
+      }
+
       return {
-        output: response.choices[0].message.content,
-        usage: response.usage
+        output: fullResponse,
+        usage: response.usage || {}
       };
-      
+
     } catch (error) {
       return { error: `Answer generation failed: ${error.message}` };
     }
