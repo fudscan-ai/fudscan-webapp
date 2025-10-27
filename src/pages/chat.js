@@ -587,47 +587,7 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Citations / Data Sources */}
-                    {message.citations && message.citations.length > 0 && (
-                      <div style={{marginTop: '20px', padding: '16px', backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: '4px'}}>
-                        <div style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '12px'}}>📊 Data Sources Used:</div>
-                        {message.citations.map((citation, index) => (
-                          <div key={index} style={{fontSize: '15px', marginBottom: '10px', paddingLeft: '12px', borderLeft: '3px solid rgba(0,0,0,0.2)'}}>
-                            <div style={{fontWeight: 'bold', marginBottom: '4px'}}>
-                              {citation.type === 'api_tool' && '🛠️ '}
-                              {citation.type === 'knowledge_base' && '📚 '}
-                              {citation.type === 'ai_model' && '🤖 '}
-                              {citation.source}
-                              {citation.success === false && ' ❌'}
-                              {citation.success === true && ' ✓'}
-                            </div>
-                            {citation.description && (
-                              <div style={{fontSize: '14px', opacity: 0.8, marginBottom: '4px'}}>{citation.description}</div>
-                            )}
-                            {citation.category && (
-                              <div style={{fontSize: '13px', opacity: 0.6}}>Category: {citation.category}</div>
-                            )}
-                            {citation.type === 'api_tool' && citation.data && (
-                              <details style={{fontSize: '13px', marginTop: '6px', cursor: 'pointer'}}>
-                                <summary style={{opacity: 0.7, userSelect: 'none'}}>View raw data</summary>
-                                <pre style={{
-                                  marginTop: '8px',
-                                  padding: '8px',
-                                  backgroundColor: 'rgba(0,0,0,0.05)',
-                                  borderRadius: '4px',
-                                  overflow: 'auto',
-                                  maxHeight: '200px',
-                                  fontSize: '12px',
-                                  lineHeight: '1.4'
-                                }}>
-                                  {JSON.stringify(citation.data, null, 2)}
-                                </pre>
-                              </details>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* Citations / Data Sources - REMOVED per user request */}
 
                     {/* RAG Context Indicator */}
                     {message.ragContext && (
@@ -725,10 +685,6 @@ export default function ChatPage() {
               </button>
             </div>
           </form>
-
-          <div className="mac-text-sm" style={{marginTop: '10px', textAlign: 'center'}}>
-            Scan whitepapers, contracts, and teams for risk and red flags
-          </div>
         </div>
       </div>
 

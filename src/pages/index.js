@@ -206,6 +206,13 @@ export default function ChatPage() {
         }));
         break;
 
+      case 'answer_chunk':
+        // Handle streaming answer chunks
+        updateLastMessage(prev => ({
+          content: (prev.content || '') + (data.chunk || '')
+        }));
+        break;
+
       case 'token':
         // This would be for streaming text tokens, but our current implementation
         // sends complete answers in step_complete
@@ -494,14 +501,6 @@ export default function ChatPage() {
               }}
               className="nes-input is-dark pixel-text-sm"
             />
-            {isLoading && (
-              <button
-                onClick={cancelRequest}
-                className="nes-btn is-error pixel-text-sm"
-              >
-                CANCEL
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -569,30 +568,9 @@ export default function ChatPage() {
                     {/* Workflow Steps */}
                     {message.steps && message.steps.length > 0 && (
                       <div className="mb-4">
-                        {/* Progress Indicator */}
-                        {(() => {
-                          const progress = getWorkflowProgress(message.steps);
-                          return (
-                            <div className="nes-container is-success with-title mb-4">
-                              <p className="title">PROGRESS</p>
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="pixel-text-sm text-white">
-                                  EXECUTION: {progress.completed}/{progress.total} STEPS
-                                </div>
-                                <div className="pixel-text-sm text-green-400">
-                                  {progress.percentage.toFixed(0)}% DONE
-                                </div>
-                              </div>
-                              <progress className="nes-progress is-success" value={progress.percentage} max="100"></progress>
-                            </div>
-                          );
-                        })()}
-
-                        {/* Timeline View */}
-                        {renderWorkflowTimeline(message.steps)}
-                        
-                        {/* Detailed Steps */}
-                        <div className="pixel-text-sm text-yellow-400 mb-3">DETAILED EXECUTION STEPS:</div>
+                        {/* Simplified Step Display */}
+                        <div className="nes-container is-dark with-title">
+                          <p className="title">EXECUTION</p>
                         <div className="space-y-3">
                           {message.steps.map((step, index) => (
                             <div key={index} className="nes-container is-dark">
@@ -625,16 +603,24 @@ export default function ChatPage() {
                               
                               {/* Error Display */}
                               {step.error && (
-                                <div className="nes-container is-error mt-2">
-                                  <div className="pixel-text-sm text-white">EXECUTION FAILED:</div>
-                                  <div className="pixel-text-sm mt-1 text-red-300">{step.error}</div>
+                                <div className="mt-2 pixel-text-sm text-red-400">
+                                  ⚠️ {step.error}
                                 </div>
                               )}
-                              
-                              {/* Step Details */}
-                              {(step.parameters || step.tools || step.result) && renderStepDetails(step, message.id)}
+
+                              {/* Show tools used if available */}
+                              {step.tools && step.tools.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {step.tools.map((tool, idx) => (
+                                    <span key={idx} className="nes-badge is-primary pixel-text-sm">
+                                      {tool}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
+                        </div>
                         </div>
                       </div>
                     )}
@@ -681,8 +667,8 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Citations */}
-                    {message.citations && message.citations.length > 0 && (
+                    {/* Citations - Hidden as per user request */}
+                    {/* {message.citations && message.citations.length > 0 && (
                       <div className="nes-container is-warning with-title mt-3">
                         <p className="title">REFERENCES</p>
                         {message.citations.map((citation, index) => (
@@ -691,7 +677,7 @@ export default function ChatPage() {
                           </div>
                         ))}
                       </div>
-                    )}
+                    )} */}
 
                     {/* Metadata */}
                     <div className="flex items-center justify-between mt-3">
@@ -733,6 +719,15 @@ export default function ChatPage() {
                 "SEND"
               )}
             </button>
+            {isLoading && (
+              <button
+                type="button"
+                onClick={cancelRequest}
+                className="nes-btn is-error pixel-text-sm"
+              >
+                CANCEL
+              </button>
+            )}
           </form>
           
           {!apiKey && (

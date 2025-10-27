@@ -55,12 +55,7 @@ export default async function handler(req, res) {
         intent: workflowPlan.intent,
         coin: null,
         workflow: workflowPlan,
-        citations: [{
-          type: 'ai_model',
-          source: 'OpenAI GPT-4o',
-          description: 'Direct answer from AI knowledge',
-          success: true
-        }]
+        citations: []
       });
     }
 
@@ -157,15 +152,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Add OpenAI model as a citation for answer generation
-    if (finalAnswer) {
-      context.citations.push({
-        type: 'ai_model',
-        source: 'OpenAI GPT-4o',
-        description: 'AI model used for final answer synthesis',
-        success: true
-      });
-    }
+    // Citations for OpenAI removed per user request
 
     // Send final done event with sources
     sendEvent('done', {
