@@ -12,6 +12,9 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // For PlanetScale MySQL, change to:
+  // provider = "mysql"
+  // url      = env("DATABASE_URL")
 }
 
 model TokenPrice {

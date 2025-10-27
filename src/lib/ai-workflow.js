@@ -515,7 +515,7 @@ console.log(answerPrompt);
       switch (tool.category) {
         case 'debank':
           headers = {
-            'AccessKey': process.env.DEBANK_ACCESS_KEY || 'your-debank-key',
+            'AccessKey': process.env.DEBANK_API_KEY || 'your-debank-key',
             'accept': 'application/json'
           };
           // DeBank uses GET with query parameters

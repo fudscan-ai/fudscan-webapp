@@ -667,17 +667,51 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Citations - Hidden as per user request */}
-                    {/* {message.citations && message.citations.length > 0 && (
-                      <div className="nes-container is-warning with-title mt-3">
-                        <p className="title">REFERENCES</p>
-                        {message.citations.map((citation, index) => (
-                          <div key={index} className="pixel-text-sm text-white">
-                            • {citation.filename || citation.source}
-                          </div>
-                        ))}
+                    {/* Data Sources Used */}
+                    {message.citations && message.citations.filter(c => c.type === 'api_tool').length > 0 && (
+                      <div className="nes-container is-dark with-title mt-3">
+                        <p className="title">📊 DATA SOURCES USED</p>
+                        <div className="space-y-2">
+                          {message.citations
+                            .filter(c => c.type === 'api_tool')
+                            .map((citation, index) => {
+                              // Get friendly category names
+                              const categoryIcons = {
+                                'dex': '📈',
+                                'nansen': '🐋',
+                                'debank': '💰',
+                                'external': '🔗'
+                              };
+                              const categoryNames = {
+                                'dex': 'DexScreener',
+                                'nansen': 'Nansen',
+                                'debank': 'DeBank',
+                                'external': 'External API'
+                              };
+
+                              const icon = categoryIcons[citation.category] || '🔗';
+                              const categoryName = categoryNames[citation.category] || citation.category;
+
+                              return (
+                                <div key={index} className="flex items-start space-x-2 pixel-text-sm text-white">
+                                  <span>{icon}</span>
+                                  <div className="flex-1">
+                                    <span className="text-blue-400">{categoryName}</span>
+                                    {citation.success !== false ? (
+                                      <span className="text-green-400 ml-2">✓</span>
+                                    ) : (
+                                      <span className="text-red-400 ml-2">✗ Failed</span>
+                                    )}
+                                    {citation.description && (
+                                      <div className="text-gray-400 text-xs mt-1">{citation.description}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
                       </div>
-                    )} */}
+                    )}
 
                     {/* Metadata */}
                     <div className="flex items-center justify-between mt-3">
