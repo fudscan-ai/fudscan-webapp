@@ -689,29 +689,83 @@ export default function ChatPage() {
                                 'dex': '📈',
                                 'nansen': '🐋',
                                 'debank': '💰',
+                                'aibrk': '🤖',
                                 'external': '🔗'
                               };
                               const categoryNames = {
                                 'dex': 'DexScreener',
                                 'nansen': 'Nansen',
                                 'debank': 'DeBank',
+                                'aibrk': 'AIBRK',
                                 'external': 'External API'
                               };
 
                               const icon = categoryIcons[citation.category] || '🔗';
                               const categoryName = categoryNames[citation.category] || citation.category;
 
+                              // Extract statistics from API data
+                              const extractStats = (data) => {
+                                if (!data) return null;
+
+                                const stats = [];
+
+                                // DexScreener stats
+                                if (citation.category === 'dex' && data.pairs) {
+                                  stats.push(`${data.pairs.length} trading pairs found`);
+                                  if (data.pairs[0]) {
+                                    const pair = data.pairs[0];
+                                    if (pair.priceUsd) stats.push(`$${parseFloat(pair.priceUsd).toFixed(2)} USD`);
+                                    if (pair.volume?.h24) stats.push(`$${parseFloat(pair.volume.h24).toLocaleString()} 24h vol`);
+                                    if (pair.liquidity?.usd) stats.push(`$${parseFloat(pair.liquidity.usd).toLocaleString()} liquidity`);
+                                  }
+                                }
+
+                                // Nansen stats
+                                if (citation.category === 'nansen') {
+                                  if (data.holdings) stats.push(`${data.holdings.length} holdings analyzed`);
+                                  if (data.trades) stats.push(`${data.trades.length} trades tracked`);
+                                  if (data.netflows) stats.push(`${data.netflows.length} netflow records`);
+                                }
+
+                                // DeBank stats
+                                if (citation.category === 'debank') {
+                                  if (data.chain_list) stats.push(`${data.chain_list.length} chains`);
+                                  if (data.token_list) stats.push(`${data.token_list.length} tokens`);
+                                  if (data.total_usd_value) stats.push(`$${parseFloat(data.total_usd_value).toLocaleString()} value`);
+                                }
+
+                                // AIBRK stats
+                                if (citation.category === 'aibrk' && data.toolResults) {
+                                  const toolCount = Object.keys(data.toolResults).length;
+                                  stats.push(`${toolCount} tools executed`);
+                                  if (data.answer) stats.push('AI analysis complete');
+                                }
+
+                                return stats.length > 0 ? stats : null;
+                              };
+
+                              const stats = extractStats(citation.data);
+
                               return (
                                 <div key={index} className="flex items-start space-x-2 pixel-text-sm text-black">
                                   <span>{icon}</span>
                                   <div className="flex-1">
-                                    <span className="text-blue-400">{categoryName}</span>
-                                    {citation.success !== false ? (
-                                      <span className="text-green-400 ml-2">✓</span>
-                                    ) : (
-                                      <span className="text-red-400 ml-2">✗ Failed</span>
+                                    <div className="flex items-center">
+                                      <span className="text-blue-600 font-semibold">{categoryName}</span>
+                                      {citation.success !== false ? (
+                                        <span className="text-green-600 ml-2">✓</span>
+                                      ) : (
+                                        <span className="text-red-600 ml-2">✗ Failed</span>
+                                      )}
+                                    </div>
+                                    {stats && stats.length > 0 && (
+                                      <div className="text-gray-700 text-xs mt-1">
+                                        {stats.map((stat, i) => (
+                                          <div key={i}>• {stat}</div>
+                                        ))}
+                                      </div>
                                     )}
-                                    {citation.description && (
+                                    {citation.description && !stats && (
                                       <div className="text-gray-600 text-xs mt-1">{citation.description}</div>
                                     )}
                                   </div>

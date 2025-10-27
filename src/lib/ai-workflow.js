@@ -584,6 +584,29 @@ console.log(answerPrompt);
           }
           break;
 
+        case 'aibrk':
+          // AIBRK uses JWT Bearer token authentication
+          headers = {
+            'Authorization': `Bearer ${process.env.JWT_SECRET || 'cmh1cyebi008qqsux3xn3x280'}`,
+            'Accept': '*/*'
+          };
+          // AIBRK uses GET with query parameters
+          if (tool.method === 'GET') {
+            const params = new URLSearchParams();
+            Object.entries(parameters).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                if (typeof value === 'object') {
+                  params.append(key, JSON.stringify(value));
+                } else {
+                  params.append(key, value);
+                }
+              }
+            });
+            queryParams = params.toString();
+            if (queryParams) url += `?${queryParams}`;
+          }
+          break;
+
         default:
           // Generic handling
           headers = {
@@ -628,8 +651,76 @@ console.log(answerPrompt);
         };
       }
 
+      // Special handling for AIBRK SSE response
+      if (tool.category === 'aibrk') {
+        console.log('Parsing AIBRK SSE response...');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let toolResults = {};
+        let finalAnswer = '';
+        let workflowPlan = null;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const eventData = JSON.parse(line.slice(6));
+
+                  // Collect tool results from step_complete events
+                  if (eventData.result && eventData.result.output) {
+                    toolResults = { ...toolResults, ...eventData.result.output };
+                  }
+
+                  // Get final answer if available
+                  if (eventData.message) {
+                    finalAnswer = eventData.message;
+                  }
+
+                  // Get workflow plan
+                  if (eventData.workflow) {
+                    workflowPlan = eventData;
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse SSE data:', line);
+                }
+              }
+            }
+          }
+
+          return {
+            success: true,
+            data: {
+              toolResults,
+              answer: finalAnswer,
+              workflowPlan,
+              source: 'aibrk'
+            },
+            tool: tool.name,
+            parameters
+          };
+        } catch (error) {
+          console.error('Failed to parse AIBRK SSE:', error);
+          return {
+            success: false,
+            error: error.message,
+            tool: tool.name,
+            parameters
+          };
+        }
+      }
+
+      // Regular JSON response for other tools
       const data = await response.json();
-      
+
       return {
         success: true,
         data,
