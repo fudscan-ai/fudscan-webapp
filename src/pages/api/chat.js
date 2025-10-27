@@ -26,9 +26,20 @@ export default async function handler(req, res) {
       });
     }
 
-    // For FUDSCAN, use a default client setup
+    // For FUDSCAN, look up client by API key
     // In production, you'd get this from user session/authentication
-    const clientId = process.env.DEFAULT_CLIENT_ID || 'fudscan-default';
+    const apiKey = process.env.NEXT_PUBLIC_DEFAULT_API_KEY || 'test_api_key_12345';
+    const client = await prisma.client.findFirst({
+      where: { apiKey }
+    });
+
+    if (!client) {
+      return res.status(401).json({
+        message: 'Invalid API key. Please check your configuration.'
+      });
+    }
+
+    const clientId = client.id;
 
     // Get available tools and knowledge bases
     const availableTools = await getAvailableTools(clientId);
