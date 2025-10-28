@@ -550,7 +550,7 @@ console.log(answerPrompt);
   }
 
   /**
-   * Call external API based on category
+   * Call external API based on category with timeout
    */
   async callExternalAPI(tool, parameters) {
     try {
@@ -559,11 +559,25 @@ console.log(answerPrompt);
       let body = null;
       let queryParams = '';
 
+      // Create abort controller for timeout (10 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       // Category-specific handling
       switch (tool.category) {
         case 'debank':
+          // Check if API key is configured
+          if (!process.env.DEBANK_API_KEY || process.env.DEBANK_API_KEY.includes('your-debank')) {
+            console.warn('⚠️ DEBANK_API_KEY not configured - tool will likely fail');
+            return {
+              success: false,
+              error: 'DeBank API key not configured in environment variables',
+              tool: tool.name,
+              parameters
+            };
+          }
           headers = {
-            'AccessKey': process.env.DEBANK_API_KEY || 'your-debank-key',
+            'AccessKey': process.env.DEBANK_API_KEY,
             'accept': 'application/json'
           };
           // DeBank uses GET with query parameters
@@ -580,8 +594,18 @@ console.log(answerPrompt);
           break;
 
         case 'nansen':
+          // Check if API key is configured
+          if (!process.env.NANSEN_API_KEY || process.env.NANSEN_API_KEY.includes('your-nansen')) {
+            console.warn('⚠️ NANSEN_API_KEY not configured - tool will likely fail');
+            return {
+              success: false,
+              error: 'Nansen API key not configured in environment variables',
+              tool: tool.name,
+              parameters
+            };
+          }
           headers = {
-            'apiKey': process.env.NANSEN_API_KEY || 'your-nansen-key',
+            'apiKey': process.env.NANSEN_API_KEY,
             'Content-Type': 'application/json',
             'Accept': '*/*'
           };
@@ -685,15 +709,19 @@ console.log(answerPrompt);
       const response = await fetch(url, {
         method: tool.method,
         headers,
-        body
+        body,
+        signal: controller.signal
       });
+
+      // Clear timeout on successful response
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.log(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         return {
           success: false,
-          error: errorText,
+          error: `API returned ${response.status}: ${errorText}`,
           tool: tool.name,
           parameters
         };
@@ -778,6 +806,18 @@ console.log(answerPrompt);
 
     } catch (error) {
       console.error(`External API call failed for ${tool.name}:`, error);
+
+      // Handle timeout errors
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: 'API request timeout (10s exceeded)',
+          timeout: true,
+          tool: tool.name,
+          parameters
+        };
+      }
+
       return {
         success: false,
         error: error.message,
