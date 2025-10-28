@@ -1,32 +1,10 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "npm install",
-  "devCommand": "npm run dev",
+  "buildCommand": "prisma generate && next build",
   "regions": ["iad1"],
   "functions": {
     "src/pages/api/**/*.js": {
       "maxDuration": 30
-    }
-  },
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "OPENAI_API_KEY": "@openai_api_key",
-    "JWT_SECRET": "@jwt_secret",
-    "CHROMA_URL": "@chroma_url",
-    "NEXT_PUBLIC_BASE_URL": "@next_public_base_url",
-    "NEXT_PUBLIC_DEFAULT_API_KEY": "@next_public_default_api_key",
-    "DEBANK_API_KEY": "@debank_api_key",
-    "NANSEN_API_KEY": "@nansen_api_key",
-    "DEXSCREENER_API_KEY": "@dexscreener_api_key"
-  },
-  "build": {
-    "env": {
-      "DATABASE_URL": "@database_url",
-      "OPENAI_API_KEY": "@openai_api_key",
-      "JWT_SECRET": "@jwt_secret",
-      "CHROMA_URL": "@chroma_url"
     }
   }
 }
