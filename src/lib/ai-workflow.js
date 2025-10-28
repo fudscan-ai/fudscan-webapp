@@ -49,29 +49,71 @@ When TOOL_ENHANCED is needed, you must specify:
 - Include both price/market data AND on-chain activity data
 - The actual parameters to pass to each tool (extract token symbol/address from query)
 - answer_generating step is the final step to synthesize FUD analysis
-  
-Respond in JSON format:
+
+**CRITICAL: For api_calling steps, you MUST populate the "tools" array with ACTUAL tool names from the Available API Tools list!**
+Example:
 {
-  "intent": "DIRECT_ANSWER" | "TOOL_ENHANCED",
-  "confidence": 0.0-1.0,
+  "type": "api_calling",
+  "name": "Get token price data",
+  "tools": ["dex.search"],  // ← MUST include actual tool names!
+  "parameters": {"q": "Filecoin"}
+}
+  
+Respond in JSON format WITHOUT any comments (pure JSON only):
+{
+  "intent": "DIRECT_ANSWER or TOOL_ENHANCED",
+  "confidence": 0.9,
   "reasoning": "explanation of your decision",
   "reply": "your direct answer",
   "workflow": {
     "steps": [
       {
-        "type": "thinking" | "rag_retrieving" | "api_calling" | "answer_generating",
+        "type": "api_calling",
         "name": "human readable step name",
-        "tools": ["tool.name1", "tool.name2"], // only for api_calling steps
-        "parameters": {} // parameters to pass to tools
+        "tools": ["dex.search", "nansen.smart.holdings"],
+        "parameters": {"q": "TokenName"}
       }
     ],
-    "useRag": boolean,
-    "ragQuery": "optimized query for knowledge base search"
+    "useRag": false,
+    "ragQuery": ""
   }
 }
-  The answer must be in JSON String, so that I can parse it with JSON.parse directly.
-  Do not add any additional text or comments to the answer.
-  Do not use markdown format or any other formatting. Only raw text.
+
+EXAMPLE for "Tell me about Filecoin":
+{
+  "intent": "TOOL_ENHANCED",
+  "confidence": 0.9,
+  "reasoning": "Filecoin analysis needs market data and smart money tracking",
+  "reply": "Analyzing Filecoin...",
+  "workflow": {
+    "steps": [
+      {
+        "type": "api_calling",
+        "name": "Get Filecoin market data",
+        "tools": ["dex.search"],
+        "parameters": {"q": "Filecoin"}
+      },
+      {
+        "type": "api_calling",
+        "name": "Analyze smart money activity",
+        "tools": ["nansen.smart.holdings"],
+        "parameters": {"token": "FIL"}
+      },
+      {
+        "type": "answer_generating",
+        "name": "Generate FUD analysis",
+        "tools": [],
+        "parameters": {}
+      }
+    ],
+    "useRag": false,
+    "ragQuery": ""
+  }
+}
+
+The answer must be in JSON String, so that I can parse it with JSON.parse directly.
+Do not add any additional text or comments to the answer.
+Do not use markdown format or any other formatting. Only raw text.
   `;
   }
 
@@ -108,8 +150,14 @@ ${kbDescriptions}
 
 User Query: "${query}"
 
-- Analyze this query and determine the appropriate workflow.
-- if user api tools, you should build the actual parameters in step parameters.
+INSTRUCTIONS:
+1. Analyze this query and determine the appropriate workflow
+2. For token/project queries, create api_calling steps with:
+   - Specific tool names in the "tools" array (e.g., ["dex.search", "nansen.smart.holdings"])
+   - Actual parameters extracted from the query (e.g., {"q": "Filecoin"})
+3. Use 2-3 different tools for comprehensive analysis
+4. ALWAYS populate the "tools" array - NEVER leave it empty!
+5. Match tool names exactly as shown in the Available API Tools list above
 `;
 
       const response = await openai.chat.completions.create({
@@ -154,7 +202,7 @@ User Query: "${query}"
   validateWorkflowResult(result, availableTools) {
     const validIntents = ['DIRECT_ANSWER', 'TOOL_ENHANCED'];
     const validStepTypes = ['thinking', 'rag_retrieving', 'api_calling', 'answer_generating'];
-    
+
     // Validate intent
     if (!validIntents.includes(result.intent)) {
       result.intent = 'TOOL_ENHANCED';
@@ -181,7 +229,7 @@ User Query: "${query}"
       if (!validStepTypes.includes(step.type)) {
         step.type = 'thinking';
       }
-      
+
       // Validate tools exist in available tools
       if (step.tools && Array.isArray(step.tools)) {
         const availableToolNames = availableTools.map(t => t.name);

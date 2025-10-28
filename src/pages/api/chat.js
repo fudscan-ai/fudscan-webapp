@@ -201,23 +201,33 @@ export default async function handler(req, res) {
  */
 async function getAvailableTools(clientId) {
   try {
-    // Try to get tools from database
-    const tools = await prisma.apiTool.findMany({
+    // Query through ClientApiTool junction table to get tools assigned to this client
+    const clientApiTools = await prisma.clientApiTool.findMany({
       where: {
         clientId: clientId,
-        isActive: true
+        isEnabled: true
       },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        category: true,
-        endpoint: true,
-        method: true,
-        parameters: true,
-        isExternal: true
+      include: {
+        apiTool: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            category: true,
+            endpoint: true,
+            method: true,
+            parameters: true,
+            isExternal: true,
+            isActive: true
+          }
+        }
       }
     });
+
+    // Extract and filter only active tools
+    const tools = clientApiTools
+      .map(cat => cat.apiTool)
+      .filter(tool => tool && tool.isActive);
 
     return tools;
   } catch (error) {
