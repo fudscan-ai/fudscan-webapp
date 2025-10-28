@@ -21,12 +21,13 @@ Available workflow types:
 2. TOOL_ENHANCED - For ALL token/project analysis (ALWAYS USE MULTIPLE TOOLS)
 
 **CRITICAL Decision Guidelines:**
-- For ANY token/project query: ALWAYS use TOOL_ENHANCED with AT LEAST 2-3 different data sources
-- NEVER analyze a token with just one data source - that's incomplete due diligence
+- For ANY token/project query: ALWAYS use TOOL_ENHANCED
+- START with DexScreener ONLY (it's fast and free) - get price, volume, liquidity
+- ONLY add Nansen/DeBank if user EXPLICITLY asks about "whale activity", "smart money", or "wallet analysis"
 - Available real API categories:
-  * DexScreener (dex.search, dex.token, dex.pair) - Price, volume, liquidity, trading pairs
-  * Nansen (nansen.smart.holdings, nansen.smart.trades, nansen.smart.netflows) - Smart money activity, whale tracking
-  * DeBank (debank.user.token_list, debank.user.chain_balance) - Wallet holdings, DeFi positions
+  * DexScreener (dex.search, dex.token, dex.pair) - Price, volume, liquidity, trading pairs (ALWAYS USE THIS FIRST)
+  * Nansen (nansen.smart.holdings, nansen.smart.trades, nansen.smart.netflows) - Smart money activity (ONLY IF ASKED)
+  * DeBank (debank.user.token_list, debank.user.chain_balance) - Wallet holdings (ONLY IF WALLET MENTIONED)
 - Use DIRECT_ANSWER ONLY for: "What is blockchain?" "How does DeFi work?" etc.
 
 **Confidence Score Guidelines (0.0-1.0):**
@@ -37,18 +38,18 @@ Available workflow types:
 - Below 0.3: Not enough data sources for proper due diligence
 
 **Multi-Source Strategy:**
-For token queries, you MUST plan to use:
-1. DexScreener (dex.search) - Find token, get price, volume, liquidity data
-2. Nansen smart money tools - Track whale activity, smart trader positions
-3. DeBank tools (if wallet analysis needed) - DeFi positions, token holdings
+For token queries, DEFAULT workflow:
+1. DexScreener (dex.search) - ALWAYS use this - fast, free, comprehensive price/volume/liquidity data
+
+ONLY add additional tools if user SPECIFICALLY requests:
+2. Nansen (nansen.smart.holdings) - ONLY if "whale", "smart money", "institutional" mentioned
+3. DeBank (debank.user.token_list) - ONLY if wallet address or "wallet analysis" mentioned
 
 When TOOL_ENHANCED is needed, you must specify:
-- Use 2-3 different tools for comprehensive analysis (NOT just one!)
-- Start with dex.search to find the token and get baseline metrics
-- Add nansen tools to track smart money/whale activity
-- Include both price/market data AND on-chain activity data
+- DEFAULT: Use ONLY dex.search for fast response with price/volume/liquidity
+- ONLY add additional tools if user query mentions: "whale", "smart money", "wallet"
 - The actual parameters to pass to each tool (extract token symbol/address from query)
-- answer_generating step is the final step to synthesize FUD analysis
+- answer_generating step is the final step to synthesize analysis
 
 **CRITICAL: For api_calling steps, you MUST populate the "tools" array with ACTUAL tool names from the Available API Tools list!**
 Example:
@@ -83,7 +84,7 @@ EXAMPLE for "Tell me about Filecoin":
 {
   "intent": "TOOL_ENHANCED",
   "confidence": 0.9,
-  "reasoning": "Filecoin analysis needs market data and smart money tracking",
+  "reasoning": "Filecoin price/volume analysis using DexScreener for fast response",
   "reply": "Analyzing Filecoin...",
   "workflow": {
     "steps": [
@@ -94,14 +95,40 @@ EXAMPLE for "Tell me about Filecoin":
         "parameters": {"q": "Filecoin"}
       },
       {
+        "type": "answer_generating",
+        "name": "Generate analysis",
+        "tools": [],
+        "parameters": {}
+      }
+    ],
+    "useRag": false,
+    "ragQuery": ""
+  }
+}
+
+EXAMPLE for "Tell me about Bitcoin whale activity":
+{
+  "intent": "TOOL_ENHANCED",
+  "confidence": 0.95,
+  "reasoning": "User specifically asked about whales, so include both price data AND smart money tracking",
+  "reply": "Analyzing Bitcoin and whale activity...",
+  "workflow": {
+    "steps": [
+      {
         "type": "api_calling",
-        "name": "Analyze smart money activity",
+        "name": "Get Bitcoin market data",
+        "tools": ["dex.search"],
+        "parameters": {"q": "Bitcoin"}
+      },
+      {
+        "type": "api_calling",
+        "name": "Track whale holdings",
         "tools": ["nansen.smart.holdings"],
-        "parameters": {"token": "FIL"}
+        "parameters": {"chains": ["ethereum"], "filters": {"include_native_tokens": true}}
       },
       {
         "type": "answer_generating",
-        "name": "Generate FUD analysis",
+        "name": "Generate whale analysis",
         "tools": [],
         "parameters": {}
       }
@@ -559,9 +586,9 @@ console.log(answerPrompt);
       let body = null;
       let queryParams = '';
 
-      // Create abort controller for timeout (10 seconds)
+      // Create abort controller for timeout (5 seconds)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       // Category-specific handling
       switch (tool.category) {
@@ -811,7 +838,7 @@ console.log(answerPrompt);
       if (error.name === 'AbortError') {
         return {
           success: false,
-          error: 'API request timeout (10s exceeded)',
+          error: 'API request timeout (5s exceeded)',
           timeout: true,
           tool: tool.name,
           parameters
