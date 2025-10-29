@@ -10,7 +10,8 @@ export default function Document() {
         <meta property="og:title" content="FUDSCAN - The Ultimate FOMO/FUD Risk Scanner" />
         <meta property="og:description" content="AI-powered crypto risk analysis. Instant due diligence for whitepapers, smart contracts, and project teams." />
         <meta property="og:type" content="website" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </Head>
       <body className="antialiased">
         <Main />

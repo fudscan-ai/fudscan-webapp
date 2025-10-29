@@ -90,18 +90,23 @@ export default async function handler(req, res) {
           status: 'processing'
         }
       });
-    // Set up Server-Sent Events
+    // Set up Server-Sent Events with NO buffering
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
 
     const sendEvent = (event, data) => {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      const eventData = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      res.write(eventData);
+      // Force immediate flush - Node.js may buffer otherwise
+      if (res.flush && typeof res.flush === 'function') {
+        res.flush();
+      }
     };
 
     try {
