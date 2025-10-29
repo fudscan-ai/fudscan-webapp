@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { marked } from 'marked';
 
-export default function ChatBox({ 
-  apiKey, 
-  onApiKeyChange, 
+export default function ChatBox({
+  apiKey,
+  onApiKeyChange,
   className = "",
-  placeholder = "输入你的问题...",
-  height = "600px" 
+  placeholder = "Ask me anything about crypto...",
+  height = "600px"
 }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -73,14 +74,23 @@ export default function ChatBox({
 
       const response = await fetch('/api/ai/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, apiKey, options: {} }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ query, options: {} }),
         signal: abortControllerRef.current.signal
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Request failed');
+        let errorMessage = 'Request failed';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || errorMessage;
+        } catch (e) {
+          errorMessage = `Request failed with status ${response.status}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const reader = response.body.getReader();
@@ -119,7 +129,7 @@ export default function ChatBox({
       if (error.name !== 'AbortError') {
         console.error('Chat error:', error);
         updateLastMessage({
-          content: `错误: ${error.message}`,
+          content: `Error: ${error.message || 'An unexpected error occurred'}`,
           isStreaming: false,
           error: true
         });
@@ -140,6 +150,7 @@ export default function ChatBox({
 
       case 'step_start':
         updateLastMessage(prev => ({
+          ...prev,
           steps: [...(prev.steps || []), {
             ...data,
             status: 'running',
@@ -152,12 +163,14 @@ export default function ChatBox({
       case 'answer_chunk':
         // Append streaming chunk to message content
         updateLastMessage(prev => ({
+          ...prev,
           content: (prev.content || '') + data.chunk
         }));
         break;
 
       case 'step_complete':
         updateLastMessage(prev => ({
+          ...prev,
           steps: (prev.steps || []).map(step =>
             (step.stepId === data.stepId || step.id === data.stepId || step.type === data.type)
               ? { ...step, status: 'completed', result: data.result, endTime: Date.now() }
@@ -168,6 +181,7 @@ export default function ChatBox({
         // If this is the answer generating step and no streaming happened, use the full output
         if (data.type === 'answer_generating' && data.result?.output) {
           updateLastMessage(prev => ({
+            ...prev,
             content: prev.content || data.result.output
           }));
         }
@@ -183,7 +197,7 @@ export default function ChatBox({
 
       case 'error':
         updateLastMessage({
-          content: `错误: ${data.message}`,
+          content: `Error: ${data.message || 'An unexpected error occurred'}`,
           isStreaming: false,
           error: true
         });
@@ -207,139 +221,271 @@ export default function ChatBox({
     return <div className="w-3 h-3 mr-2 bg-gray-300 rounded-full" />;
   };
 
-  const getStepName = (stepType) => {
+  const getStepName = (step) => {
+    // If step has a specific name, use it
+    if (step.name) {
+      const icons = {
+        'thinking': '🤔',
+        'rag_retrieving': '📚',
+        'api_calling': '🔧',
+        'answer_generating': '✍️'
+      };
+      const icon = icons[step.type] || '•';
+      return `${icon} ${step.name}`;
+    }
+
+    // Otherwise use generic type names
     const names = {
-      'thinking': '🤔 分析中',
-      'rag_retrieving': '📚 搜索',
-      'api_calling': '🔧 调用工具',
-      'answer_generating': '✍️ 生成回答'
+      'thinking': '🤔 Analyzing',
+      'rag_retrieving': '📚 Searching Knowledge Base',
+      'api_calling': '🔧 Calling API',
+      'answer_generating': '✍️ Generating Answer'
     };
-    return names[stepType] || stepType;
+    return names[step.type] || step.type;
   };
 
   return (
-    <div className={`flex flex-col bg-white rounded-lg shadow-lg ${className}`} style={{ height }}>
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-lg">
-        <h3 className="font-medium text-gray-900">AI Assistant</h3>
-        {onApiKeyChange && (
-          <input
-            type="password"
-            placeholder="API Key"
-            value={apiKey || ''}
-            onChange={(e) => onApiKeyChange(e.target.value)}
-            className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        )}
-        {isLoading && (
-          <button
-            onClick={cancelRequest}
-            className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-          >
-            取消
-          </button>
-        )}
+    <div className={`window ${className}`} style={{ height, display: 'flex', flexDirection: 'column', maxWidth: '800px', margin: '0 auto' }}>
+      {/* Mac Title Bar */}
+      <div className="title-bar">
+        <div className="title">FUDSCAN Chat</div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Messages Window Pane */}
+      <div className="window-pane" style={{ flex: 1, overflowY: 'scroll' }}>
         {messages.length === 0 && (
-          <div className="text-center text-gray-500 text-sm py-8">
-            <div className="mb-2">开始与AI助手对话</div>
-            <div className="text-xs text-gray-400">
-              支持Web3分析、价格查询、钱包分析等
+          <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--tertiary)' }}>
+            <div style={{ marginBottom: '0.5rem', fontFamily: 'Chicago_12', fontSize: '14px' }}>
+              Welcome to FUDSCAN Chat
+            </div>
+            <div style={{ fontSize: '12px', fontFamily: 'Geneva_9' }}>
+              Ask me anything about Web3, DeFi, tokens, or wallet analysis
             </div>
           </div>
         )}
 
         {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-lg ${
-              message.type === 'user' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-900'
-            }`}>
-              {message.type === 'user' ? (
-                <div className="text-sm">{message.content}</div>
-              ) : (
-                <div>
-                  {/* Workflow indicator */}
-                  {message.workflow && (
-                    <div className="mb-2 p-2 bg-blue-50 rounded text-xs">
-                      <span className="font-medium">
-                        {message.workflow.intent === 'DIRECT_ANSWER' ? '直接回答' : '工具增强'}
-                      </span>
-                      <span className="ml-2 text-gray-600">
-                        ({(message.workflow.confidence * 100).toFixed(0)}%)
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Steps */}
-                  {message.steps && message.steps.length > 0 && (
-                    <div className="mb-2 space-y-1">
-                      {message.steps.map((step, index) => (
-                        <div key={index} className="flex items-center text-xs">
-                          {getStepIcon(step.type, step.status)}
-                          <span className={step.status === 'completed' ? 'text-green-700' : 'text-gray-600'}>
-                            {getStepName(step.type)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Content */}
-                  <div className="text-sm">
-                    {message.content || (message.isStreaming ? '处理中...' : '')}
-                    {message.isStreaming && (
-                      <span className="inline-block w-1 h-4 bg-blue-600 ml-1 animate-pulse" />
-                    )}
-                  </div>
-
-                  {/* Timestamp */}
-                  <div className="text-xs text-gray-500 mt-2">
-                    {message.timestamp.toLocaleTimeString()}
-                    {message.latencyMs && ` • ${message.latencyMs}ms`}
-                  </div>
+          <div key={message.id} style={{ marginBottom: '1rem' }}>
+            {message.type === 'user' ? (
+              <div className="standard-dialog" style={{
+                marginLeft: 'auto',
+                maxWidth: '80%',
+                padding: '8px',
+                background: 'linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%)',
+                borderColor: '#888'
+              }}>
+                <div style={{ fontFamily: 'Chicago_12', fontSize: '14px' }}>
+                  {message.content}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="standard-dialog" style={{
+                maxWidth: '90%',
+                padding: '10px',
+                ...(message.error && {
+                  borderColor: 'red',
+                  borderWidth: '3px'
+                })
+              }}>
+                {/* Workflow indicator */}
+                {message.workflow && (
+                  <div className="inner-border" style={{ padding: '6px 10px', marginBottom: '10px', fontSize: '13px', fontFamily: 'Chicago_12' }}>
+                    <strong style={{ fontSize: '14px' }}>{message.workflow.intent === 'DIRECT_ANSWER' ? 'Direct Answer' : 'Tool Enhanced'}</strong>
+                    <span style={{ marginLeft: '8px', color: 'var(--tertiary)', fontSize: '13px' }}>
+                      ({(message.workflow.confidence * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                )}
+
+                {/* Steps */}
+                {message.steps && message.steps.length > 0 && (
+                  <div style={{ marginBottom: '8px', fontSize: '11px', fontFamily: 'Geneva_9' }}>
+                    {message.steps.map((step, index) => (
+                      <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          width: '8px',
+                          height: '8px',
+                          marginRight: '6px',
+                          backgroundColor: step.status === 'completed' ? 'var(--secondary)' : 'var(--tertiary)',
+                          border: '1px solid var(--secondary)'
+                        }} />
+                        <span>{getStepName(step)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Content */}
+                <div
+                  style={{ fontFamily: 'Chicago_12', fontSize: '14px', lineHeight: '1.5' }}
+                  dangerouslySetInnerHTML={{
+                    __html: message.content ? marked.parse(message.content) : (message.isStreaming ? 'Processing...' : '')
+                  }}
+                />
+                {message.isStreaming && (
+                  <span style={{
+                    display: 'inline-block',
+                    width: '2px',
+                    height: '14px',
+                    backgroundColor: 'var(--secondary)',
+                    marginLeft: '2px',
+                    animation: 'blink 1s infinite'
+                  }} />
+                )}
+
+                {/* Timestamp */}
+                <div style={{ fontSize: '10px', color: 'var(--tertiary)', marginTop: '8px', fontFamily: 'Geneva_9' }}>
+                  {message.timestamp.toLocaleTimeString()}
+                  {message.latencyMs && ` • ${message.latencyMs}ms`}
+                </div>
+              </div>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t bg-gray-50 rounded-b-lg">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
+      {/* Input Area */}
+      <div className="separator" style={{ padding: '8px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px', width: '100%' }}>
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={placeholder}
             disabled={isLoading || !apiKey}
-            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            style={{
+              flex: 1,
+              fontFamily: 'Chicago_12',
+              fontSize: '14px',
+              padding: '4px 8px'
+            }}
           />
           <button
             type="submit"
             disabled={isLoading || !inputValue.trim() || !apiKey}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn"
           >
-            {isLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              '发送'
-            )}
+            {isLoading ? 'Stop' : 'Send'}
           </button>
+          {isLoading && (
+            <button
+              type="button"
+              onClick={cancelRequest}
+              className="btn"
+            >
+              Cancel
+            </button>
+          )}
         </form>
-        
-        {!apiKey && (
-          <div className="mt-2 text-xs text-amber-600">
-            请先设置API Key
-          </div>
-        )}
       </div>
+
+      {!apiKey && onApiKeyChange && (
+        <div className="details-bar" style={{ fontSize: '11px', fontFamily: 'Geneva_9', justifyContent: 'center' }}>
+          <span style={{ marginRight: '8px' }}>API Key:</span>
+          <input
+            type="password"
+            placeholder="Enter API Key"
+            value={apiKey || ''}
+            onChange={(e) => onApiKeyChange(e.target.value)}
+            style={{
+              fontFamily: 'Chicago_12',
+              fontSize: '12px',
+              padding: '2px 6px',
+              width: '200px'
+            }}
+          />
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+
+        /* Markdown styling for assistant messages */
+        :global(.standard-dialog h1),
+        :global(.standard-dialog h2),
+        :global(.standard-dialog h3) {
+          font-family: Chicago, Chicago_12, monospace;
+          font-weight: bold;
+          margin: 0.5em 0 0.3em 0;
+        }
+
+        :global(.standard-dialog h1) {
+          font-size: 18px;
+        }
+
+        :global(.standard-dialog h2) {
+          font-size: 16px;
+        }
+
+        :global(.standard-dialog h3) {
+          font-size: 14px;
+        }
+
+        :global(.standard-dialog p) {
+          margin: 0.5em 0;
+        }
+
+        :global(.standard-dialog ul),
+        :global(.standard-dialog ol) {
+          margin: 0.5em 0;
+          padding-left: 2em;
+        }
+
+        :global(.standard-dialog li) {
+          margin: 0.2em 0;
+        }
+
+        :global(.standard-dialog strong) {
+          font-weight: bold;
+        }
+
+        :global(.standard-dialog em) {
+          font-style: italic;
+        }
+
+        :global(.standard-dialog code) {
+          font-family: Monaco, Courier, monospace;
+          background: rgba(0, 0, 0, 0.05);
+          padding: 0.1em 0.3em;
+          border: 1px solid var(--tertiary);
+        }
+
+        :global(.standard-dialog pre) {
+          font-family: Monaco, Courier, monospace;
+          background: rgba(0, 0, 0, 0.05);
+          padding: 0.5em;
+          border: 1px solid var(--tertiary);
+          overflow-x: auto;
+          margin: 0.5em 0;
+        }
+
+        :global(.standard-dialog pre code) {
+          background: none;
+          border: none;
+          padding: 0;
+        }
+
+        :global(.standard-dialog a) {
+          color: #0000EE;
+          text-decoration: underline;
+        }
+
+        :global(.standard-dialog a:visited) {
+          color: #551A8B;
+        }
+
+        :global(.standard-dialog blockquote) {
+          border-left: 3px solid var(--secondary);
+          padding-left: 1em;
+          margin: 0.5em 0;
+          font-style: italic;
+        }
+      `}</style>
     </div>
   );
 }

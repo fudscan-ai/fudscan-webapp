@@ -2,49 +2,32 @@ import Link from "next/link";
 
 export default function Header() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 py-6 px-6 md:px-12 bg-transparent">
-      <nav className="flex justify-between items-start mx-auto">
-        {/* Left side - Company name */}
-        <div className="text-gray-200">
-          <div className="text-xl leading-tight">
-            <div style={{
-                fontFamily: 'Times New Roman',
-              }}  className="flex items-baseline space-x-1">
-              <span className="text-4xl">AI&nbsp;</span>
-              <span className="text-xl"><em style={{fontStyle: 'normal'}} className="text-4xl ">B</em>ERKSHIRE</span>
-              <span className="text-xl"><em style={{fontStyle: 'normal'}} className="text-4xl ">H</em>ATHAWAY</span>
-            </div>
-            <div className="text-xs text-gray-500 mt-1">Powered by <Link href="/chat" className="underline hover:text-gray-300 transition-colors">FUDSCAN</Link></div>
-          </div>
-        </div>
-
-        {/* Right side - Fund link */}
-        <div className="text-gray-500">
-          <div className="text-xs text-right hover:text-gray-300 transition-colors">
-            <div>
-              <Link
-                href="/fund"
-              >
-                FUDSCAN
-              </Link>
-            </div>
-            <div>
-              <Link 
-                href="/fund" 
-              >
-                FUND
-              </Link>
-            </div>
-            <div>
-              <Link 
-                href="/fund" 
-              >
-                001
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <header style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+      borderBottom: '0.1rem solid var(--secondary)'
+    }}>
+      <ul role="menu-bar" style={{ margin: 0, padding: 0 }}>
+        <li role="menu-item" tabIndex={0}>
+          <span className="apple"></span>
+        </li>
+        <li role="menu-item" aria-haspopup="true" tabIndex={0}>
+          FUDSCAN
+          <ul role="menu">
+            <li role="menu-item">
+              <Link href="/">Chat</Link>
+            </li>
+            <li role="menu-item">
+              <Link href="/fund">Fund 001</Link>
+            </li>
+            <li role="menu-item" className="divider"></li>
+            <li role="menu-item">
+              <a href="https://fudscan.ai" target="_blank" rel="noopener noreferrer">About</a>
+            </li>
+          </ul>
+        </li>
+      </ul>
     </header>
   );
 }
