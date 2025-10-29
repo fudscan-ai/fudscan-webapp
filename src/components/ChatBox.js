@@ -13,6 +13,8 @@ export default function ChatBox({
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const chunkBufferRef = useRef('');
+  const renderIntervalRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,6 +23,54 @@ export default function ChatBox({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (renderIntervalRef.current) {
+        clearInterval(renderIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Start throttled rendering for smooth streaming effect
+  const startThrottledRendering = () => {
+    if (renderIntervalRef.current) {
+      clearInterval(renderIntervalRef.current);
+    }
+
+    // Render buffered chunks every 30ms for smooth effect
+    renderIntervalRef.current = setInterval(() => {
+      if (chunkBufferRef.current.length > 0) {
+        // Take 3-5 characters at a time for smooth appearance
+        const charsToRender = Math.min(5, chunkBufferRef.current.length);
+        const textToAdd = chunkBufferRef.current.slice(0, charsToRender);
+        chunkBufferRef.current = chunkBufferRef.current.slice(charsToRender);
+
+        updateLastMessage(prev => ({
+          ...prev,
+          content: (prev.content || '') + textToAdd
+        }));
+      }
+    }, 30);
+  };
+
+  // Stop throttled rendering and flush remaining buffer
+  const stopThrottledRendering = () => {
+    if (renderIntervalRef.current) {
+      clearInterval(renderIntervalRef.current);
+      renderIntervalRef.current = null;
+    }
+
+    // Flush any remaining buffered content
+    if (chunkBufferRef.current.length > 0) {
+      updateLastMessage(prev => ({
+        ...prev,
+        content: (prev.content || '') + chunkBufferRef.current
+      }));
+      chunkBufferRef.current = '';
+    }
+  };
 
   const addMessage = (message) => {
     setMessages(prev => [...prev, message]);
@@ -126,6 +176,9 @@ export default function ChatBox({
       }
 
     } catch (error) {
+      // Stop any ongoing throttled rendering
+      stopThrottledRendering();
+
       if (error.name !== 'AbortError') {
         console.error('Chat error:', error);
         updateLastMessage({
@@ -161,11 +214,11 @@ export default function ChatBox({
         break;
 
       case 'answer_chunk':
-        // Append streaming chunk to message content
-        updateLastMessage(prev => ({
-          ...prev,
-          content: (prev.content || '') + data.chunk
-        }));
+        // Buffer chunks for throttled rendering (OpenAI-style streaming effect)
+        if (!renderIntervalRef.current) {
+          startThrottledRendering();
+        }
+        chunkBufferRef.current += data.chunk;
         break;
 
       case 'step_complete':
@@ -188,6 +241,9 @@ export default function ChatBox({
         break;
 
       case 'done':
+        // Stop throttled rendering and flush buffer
+        stopThrottledRendering();
+
         updateLastMessage({
           isStreaming: false,
           latencyMs: data.latencyMs,
@@ -196,6 +252,9 @@ export default function ChatBox({
         break;
 
       case 'error':
+        // Stop throttled rendering on error
+        stopThrottledRendering();
+
         updateLastMessage({
           content: `Error: ${data.message || 'An unexpected error occurred'}`,
           isStreaming: false,
