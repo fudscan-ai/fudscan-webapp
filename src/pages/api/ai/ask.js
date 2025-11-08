@@ -148,31 +148,28 @@ export default async function handler(req, res) {
         workflow: workflowPlan.workflow
       });
 
-      // If direct answer, skip tool execution
+      // If direct answer, stream the response for better UX
       if (workflowPlan.intent === 'DIRECT_ANSWER') {
-        sendEvent('step_start', { 
-          type: 'answer_generating', 
-          name: 'Generating direct answer' 
+        sendEvent('step_start', {
+          type: 'answer_generating',
+          name: 'Generating direct answer'
         });
 
-        // const answerStep = {
-        //   type: 'answer_generating',
-        //   name: 'Generating direct answer',
-        //   parameters: {}
-        // };
+        // Stream the direct answer chunk by chunk for smooth display
+        const reply = workflowPlan.reply || '';
+        const chunkSize = 3; // Characters per chunk
 
-        // const answerResult = await aiWorkflow.executeWorkflowStep(
-        //   answerStep, 
-        //   query, 
-        //   { 
-        //     clientInstructions: client.instructions,
-        //     availableTools: apiTools 
-        //   }
-        // );
+        for (let i = 0; i < reply.length; i += chunkSize) {
+          const chunk = reply.slice(i, i + chunkSize);
+          sendEvent('answer_chunk', { chunk });
+
+          // Small delay for smooth streaming effect (15ms per chunk)
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
 
         sendEvent('step_complete', {
           type: 'answer_generating',
-          result: workflowPlan.reply
+          result: { output: reply }
         });
 
         // Update conversation with final response
@@ -180,7 +177,7 @@ export default async function handler(req, res) {
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: {
-              response: workflowPlan.reply,
+              response: reply,
               status: 'completed',
               latencyMs: Date.now() - startTime
             }

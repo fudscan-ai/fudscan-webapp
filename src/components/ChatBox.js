@@ -287,10 +287,10 @@ export default function ChatBox({
                   borderWidth: '3px'
                 })
               }}>
-                {/* Workflow indicator */}
-                {message.workflow && (
+                {/* Workflow indicator - only show for tool-enhanced responses */}
+                {message.workflow && message.workflow.intent !== 'DIRECT_ANSWER' && (
                   <div className="inner-border" style={{ padding: '6px 10px', marginBottom: '10px', fontSize: '13px', fontFamily: 'Chicago_12' }}>
-                    <strong style={{ fontSize: '14px' }}>{message.workflow.intent === 'DIRECT_ANSWER' ? 'Direct Answer' : 'Tool Enhanced'}</strong>
+                    <strong style={{ fontSize: '14px' }}>Tool Enhanced</strong>
                     <span style={{ marginLeft: '8px', color: 'var(--tertiary)', fontSize: '13px' }}>
                       ({(message.workflow.confidence * 100).toFixed(0)}%)
                     </span>
@@ -317,22 +317,25 @@ export default function ChatBox({
                 )}
 
                 {/* Content */}
-                <div
-                  style={{ fontFamily: 'Chicago_12', fontSize: '14px', lineHeight: '1.5' }}
-                  dangerouslySetInnerHTML={{
-                    __html: message.content ? marked.parse(message.content) : (message.isStreaming ? 'Processing...' : '')
-                  }}
-                />
-                {message.isStreaming && (
-                  <span style={{
-                    display: 'inline-block',
-                    width: '2px',
-                    height: '14px',
-                    backgroundColor: 'var(--secondary)',
-                    marginLeft: '2px',
-                    animation: 'blink 1s infinite'
-                  }} />
-                )}
+                <div style={{ fontFamily: 'Chicago_12', fontSize: '14px', lineHeight: '1.5', display: 'flex', alignItems: 'flex-start' }}>
+                  <div
+                    style={{ flex: 1 }}
+                    dangerouslySetInnerHTML={{
+                      __html: message.content ? marked.parse(message.content) : (message.isStreaming ? '' : '')
+                    }}
+                  />
+                  {message.isStreaming && (
+                    <span className="cursor-blink" style={{
+                      display: 'inline-block',
+                      width: '8px',
+                      height: '16px',
+                      backgroundColor: 'var(--secondary)',
+                      marginLeft: '2px',
+                      marginTop: '2px',
+                      flexShrink: 0
+                    }} />
+                  )}
+                </div>
 
                 {/* Timestamp */}
                 <div style={{ fontSize: '10px', color: 'var(--tertiary)', marginTop: '8px', fontFamily: 'Geneva_9' }}>
@@ -401,8 +404,12 @@ export default function ChatBox({
 
       <style jsx>{`
         @keyframes blink {
-          0%, 50% { opacity: 1; }
-          51%, 100% { opacity: 0; }
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+
+        :global(.cursor-blink) {
+          animation: blink 0.8s infinite;
         }
 
         /* Markdown styling for assistant messages */

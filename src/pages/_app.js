@@ -3,10 +3,31 @@ import "../styles/global.css";
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from '@/lib/wagmi';
+import { useEffect } from 'react';
 
 const queryClient = new QueryClient();
 
 export default function App({ Component, pageProps }) {
+  // Suppress Coinbase Analytics console errors
+  useEffect(() => {
+    const originalError = console.error;
+    console.error = (...args) => {
+      // Filter out Coinbase Analytics SDK errors
+      const message = args[0]?.toString() || '';
+      if (
+        message.includes('Analytics SDK') ||
+        message.includes('cca-lite.coinbase.com')
+      ) {
+        return; // Suppress these specific errors
+      }
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
+
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>

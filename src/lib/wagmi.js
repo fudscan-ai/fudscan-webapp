@@ -10,6 +10,10 @@ export const config = createConfig({
       appName: 'FUDSCAN',
       appLogoUrl: '/favicon.ico',
       preference: 'eoaOnly', // Use EOA (Externally Owned Account) only
+      enableMobileWalletLink: false, // Disable mobile wallet link to reduce external requests
+      // Disable analytics to prevent blocked requests to cca-lite.coinbase.com
+      overrideIsMetaMask: false,
+      headlessMode: false,
     }),
   ],
   transports: {
